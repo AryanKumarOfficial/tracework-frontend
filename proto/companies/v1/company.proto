@@ -1,0 +1,195 @@
+syntax = "proto3";
+
+package companies.v1;
+
+// Company Service Definition
+service CompanyService {
+  rpc CreateCompany (CreateCompanyRequest) returns (CompanyResponse);
+  rpc GetCompany (GetCompanyRequest) returns (CompanyResponse);
+  rpc GetAllCompanies (GetAllCompaniesRequest) returns (GetAllCompaniesResponse);
+  rpc UpdateCompany (UpdateCompanyRequest) returns (CompanyResponse);
+  rpc UpdateCompanyStatus (UpdateCompanyStatusRequest) returns (CompanyResponse);
+  rpc DeleteCompany (DeleteCompanyRequest) returns (CompanyEmptyResponse);
+  rpc VerifyCompany (VerifyCompanyRequest) returns (CompanyResponse);
+  rpc GetCompanyFullDetails (GetCompanyRequest) returns (CompanyFullDetailsResponse);
+  rpc UpdateCompanyContact (UpdateCompanyContactRequest) returns (CompanyContactResponse);
+  rpc UpdateCompanyBanking (UpdateCompanyBankingRequest) returns (CompanyBankingResponse);
+  rpc LinkUserToCompany (LinkUserToCompanyRequest) returns (CompanyUserResponse);
+  rpc UnlinkUserFromCompany (UnlinkUserFromCompanyRequest) returns (CompanyEmptyResponse);
+  rpc UpdateUserRole (UpdateUserRoleRequest) returns (CompanyUserResponse);
+  rpc GetCompanyUsers (GetCompanyUsersRequest) returns (GetCompanyUsersResponse);
+}
+
+// Messages
+message CreateCompanyRequest {
+  string companyName = 1;
+  string companyId = 2;
+  string address = 3;
+  string email = 4;
+  string phone = 5;
+  int32 industry = 6;
+  string logoUrl = 7;
+  string websiteUrl = 8;
+  string description = 9;
+}
+
+message CompanyResponse {
+  string id = 1;
+  string companyName = 2;
+  string companyId = 3;
+  string address = 4;
+  string email = 5;
+  string phone = 6;
+  int32 industry = 7;
+  string status = 8;
+  string description = 9;
+  string logoUrl = 10;
+  string websiteUrl = 11;
+  string updatedBy = 12;
+  string pan = 13;
+  string gst = 14;
+  string tan = 15;
+  int32 strength = 16;
+  string createdAt = 17;
+  string updatedAt = 18;
+}
+
+message GetCompanyRequest {
+  string id = 1;
+}
+
+message GetAllCompaniesRequest {
+  string search = 1;
+  int32 industry = 2;
+  string status = 3;
+  int32 page = 4;
+  int32 limit = 5;
+}
+
+message GetAllCompaniesResponse {
+  repeated CompanyResponse companies = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 limit = 4;
+}
+
+message UpdateCompanyRequest {
+  string id = 1;
+  string companyName = 2;
+  string address = 3;
+  string email = 4;
+  string phone = 5;
+  int32 industry = 6;
+  string logoUrl = 7;
+  string description = 8;
+  string websiteUrl = 9;
+  string updatedBy = 10;
+}
+
+message UpdateCompanyStatusRequest {
+  string id = 1;
+  int32 status = 2;
+  string updatedBy = 3;
+}
+
+message DeleteCompanyRequest {
+  string id = 1;
+}
+
+message CompanyEmptyResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message VerifyCompanyRequest {
+  string id = 1;
+  string verificationType = 2;
+  bool status = 3;
+}
+
+message CompanyFullDetailsResponse {
+  CompanyResponse company = 1;
+  CompanyContactResponse contact = 2;
+  CompanyBankingResponse banking = 3;
+}
+
+message CompanyContactResponse {
+  string id = 1;
+  string companyId = 2;
+  string state = 3;
+  string city = 4;
+  string pinCode = 5;
+  string linkedin = 6;
+  string instagram = 7;
+  string twitter = 8;
+  string createdAt = 9;
+  string updatedAt = 10;
+}
+
+message UpdateCompanyContactRequest {
+  string companyId = 1;
+  string state = 2;
+  string city = 3;
+  string pinCode = 4;
+  string linkedin = 5;
+  string instagram = 6;
+  string twitter = 7;
+}
+
+message CompanyBankingResponse {
+  string id = 1;
+  string companyId = 2;
+  string accountHolderName = 3;
+  string accountNumber = 4;
+  string bankName = 5;
+  string branchName = 6;
+  string ifscCode = 7;
+  bool isVerified = 8;
+  string createdAt = 9;
+  string updatedAt = 10;
+}
+
+message UpdateCompanyBankingRequest {
+  string companyId = 1;
+  string accountHolderName = 2;
+  string accountNumber = 3;
+  string bankName = 4;
+  string branchName = 5;
+  string ifscCode = 6;
+}
+
+message LinkUserToCompanyRequest {
+  string companyId = 1;
+  string userId = 2;
+  int32 role = 3;
+  string assignedBy = 4;
+}
+
+message UnlinkUserFromCompanyRequest {
+  string companyId = 1;
+  string userId = 2;
+}
+
+message UpdateUserRoleRequest {
+  string companyId = 1;
+  string userId = 2;
+  int32 role = 3;
+}
+
+message CompanyUserResponse {
+  string id = 1;
+  string companyId = 2;
+  string userId = 3;
+  string role = 4;
+  bool isActive = 5;
+  string assignedBy = 6;
+  string createdAt = 7;
+}
+
+message GetCompanyUsersRequest {
+  string companyId = 1;
+}
+
+message GetCompanyUsersResponse {
+  repeated CompanyUserResponse users = 1;
+}
