@@ -10,7 +10,7 @@ export default function ProfileLayout({
                                           children,
                                       }: ProfileLayoutProps) {
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col">
+        <div className="min-h-screen bg-gray-50 flex flex-col w-full">
             <div className="z-50">
                 <Header/>
             </div>

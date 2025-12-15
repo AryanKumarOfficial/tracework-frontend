@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
                 message: 'Login successful'
             });
             res.cookies.set({
-                name: 'company_secret',
+                name: 'company_token',
                 value: token,
                 httpOnly: true,
                 secure: process.env.NODE_ENV === "production",

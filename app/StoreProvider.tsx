@@ -1,0 +1,16 @@
+'use client';
+import React, {useState} from 'react';
+import {Provider} from 'react-redux';
+import {makeStore, AppStore} from '@/lib/store';
+
+export default function StoreProvider({
+                                          children,
+                                      }: {
+    children: React.ReactNode;
+}) {
+    // useState with a function argument is only called once on the initial render.
+    // This satisfies the linter and serves the same purpose as the useRef pattern.
+    const [store] = useState<AppStore>(() => makeStore());
+
+    return <Provider store={store}>{children}</Provider>;
+}
