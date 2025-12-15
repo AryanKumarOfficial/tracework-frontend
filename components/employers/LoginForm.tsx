@@ -23,6 +23,7 @@ export default function LoginForm() {
             const res = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
+                credentials: 'include',
                 body: JSON.stringify(formData),
             });
 
@@ -49,7 +50,7 @@ export default function LoginForm() {
                 <div className="grid md:grid-cols-2 gap-12 items-start">
                     {/* ... Left Side Image ... */}
                     <div className="relative h-[755px] w-[800px] overflow-hidden shadow-xl">
-                        <Image src="/images/landing-hero1.png" alt="Hero" fill className="object-cover" />
+                        <Image src="/images/landing-hero1.png" alt="Hero" fill className="object-cover"/>
                     </div>
 
                     {/* ... Right Side Form ... */}
@@ -84,8 +85,9 @@ export default function LoginForm() {
                                         required
                                         className="w-full px-4 py-3 border border-gray-300 rounded-md"
                                     />
-                                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                                        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                                    <button type="button" onClick={() => setShowPassword(!showPassword)}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                                        {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
                                     </button>
                                 </div>
                             </div>
@@ -99,7 +101,9 @@ export default function LoginForm() {
                             </button>
 
                             <p className="text-center text-sm text-gray-600 mt-4">
-                                Don&#39;t have an account? <Link href="/register" className="text-orange-500 font-semibold hover:underline">Sign Up</Link>
+                                Don&#39;t have an account? <Link href="/register"
+                                                                 className="text-orange-500 font-semibold hover:underline">Sign
+                                Up</Link>
                             </p>
                         </form>
                     </div>
