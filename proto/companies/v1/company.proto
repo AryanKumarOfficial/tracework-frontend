@@ -51,13 +51,6 @@ message GetCompanyRequest {
   string id = 1;
 }
 
-message CompanyMetadata {
-  optional string pan = 1;
-  optional string gst = 2;
-  optional string tan = 3;
-  optional int32 strength = 4;
-}
-
 message UpdateCompanyRequest {
   string id = 1;
   optional string company_name = 2;
@@ -239,6 +232,43 @@ message GetCompanyFullDetailsResponse {
   optional CompanyContactResponse contact = 2;
   optional CompanyBankingResponse banking = 3;
 }
+message CompanyFullDetailsResponse {
+  CompanyResponse company = 1;
+  CompanyContactResponse contact = 2;
+  CompanyBankingResponse banking = 3;
+}
+
+message UpdateCompanyContactRequest {
+  string company_id = 1;
+  string state = 2;
+  string city = 3;
+  string pin_code = 4;
+  string linkedin = 5;
+  string instagram = 6;
+  string twitter = 7;
+}
+
+
+message UpdateCompanyBankingRequest {
+  string company_id = 1;
+  string account_holder_name = 2;
+  string account_number = 3;
+  string bank_name = 4;
+  string branch_name = 5;
+  string ifsc_code = 6;
+}
+
+message VerifyBankingRequest {
+  string company_id = 1;
+  bool is_verified = 2;
+}
+
+message CompanyMetadata {
+  optional string pan = 1;
+  optional string gst = 2;
+  optional string tan = 3;
+  optional int32 strength = 4;
+}
 
 // Service Definition
 service CompanyService {
@@ -255,6 +285,10 @@ service CompanyService {
   rpc UnlinkUserFromCompany(UnlinkUserFromCompanyRequest) returns (CompanyEmptyResponse);
   rpc UpdateUserRole(UpdateUserRoleRequest) returns (CompanyUserResponse);
   rpc GetCompanyUsers(GetCompanyUsersRequest) returns (GetCompanyUsersResponse);
+  rpc UpdateCompanyContact(UpdateCompanyContactRequest) returns (CompanyContactResponse);
+  rpc UpdateCompanyBanking(UpdateCompanyBankingRequest) returns (CompanyBankingResponse);
+  rpc VerifyCompanyBanking(VerifyBankingRequest) returns (CompanyBankingResponse);
+
 
   // auths
   rpc Register(RegisterCompanyRequest) returns (RegisterCompanyResponse);

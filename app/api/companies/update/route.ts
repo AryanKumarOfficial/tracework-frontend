@@ -21,12 +21,15 @@ export async function POST(request: NextRequest) {
         if (updateType === 'general') {
             const updateRequest = {
                 id: body.id,
-                companyName: body.companyName,
+                company_name: body.companyName,
                 description: body.description,
-                websiteUrl: body.website_url,
-                logoUrl: body.logo_url,
+                website_url: body.websiteUrl,
+                industry: body.domain,
+                logo_url: body.logoUrl,
                 metadata: body.metadata
             };
+
+            console.log(`updateRequest: `, updateRequest)
 
             response = await new Promise((resolve, reject) => {
                 client.UpdateCompany(updateRequest, (err, res) => {

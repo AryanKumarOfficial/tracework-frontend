@@ -52,6 +52,7 @@ export default function MyProfile() {
                 console.log(`Fetched profile: `, result)
                 if (result.success && result.data) {
                     const {company, contact, banking} = result.data;
+                    console.log(`Company: `, company.industry);
 
                     dispatch(setCredentials({company}));
 
@@ -60,7 +61,9 @@ export default function MyProfile() {
                         companyName: company.company_name, // Ensure casing matches API response
                         email: company.email,
                         description: company.description,
-                        website: company.websiteUrl,
+                        domain: getDomainNumber(company.industry).toString(),
+                        logo: company.logo_url,
+                        website: company.website_url,
                         pan: company.pan,
                         gst: company.gst,
                         tan: company.tan,
@@ -116,7 +119,8 @@ export default function MyProfile() {
                     email: data.email,
                     description: data.description,
                     websiteUrl: data.website,
-                    // Send metadata as a separate object for the backend to handle
+                    logoUrl: data.logo,
+                    domain: Number(data.domain),
                     metadata: {
                         pan: data.pan,
                         gst: data.gst,
@@ -246,4 +250,25 @@ export default function MyProfile() {
             </FormProvider>
         </div>
     );
+}
+
+export enum IndustryType {
+    INDUSTRY_UNSPECIFIED = 0,
+    TECHNOLOGY = 1,
+    FINANCE = 2,
+    HEALTHCARE = 3,
+    CONSTRUCTION = 4,
+    RETAIL = 5,
+    MANUFACTURING = 6,
+    LOGISTICS = 7,
+    UNRECOGNIZED = -1,
+}
+
+function getDomainNumber(name: string) {
+    let industry;
+    if (name in IndustryType) industry = IndustryType[name as keyof typeof IndustryType];
+    else
+        industry = IndustryType.UNRECOGNIZED;
+    console.log(`IndustryType: ${industry}`);
+    return industry;
 }

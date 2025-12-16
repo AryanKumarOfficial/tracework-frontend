@@ -21,21 +21,10 @@ export const CompanyInfoTab = () => {
                 <FormInput label="Company TAN" required {...register('tan')} error={errors.tan}/>
             </div>
 
-            {/* Logo Upload */}
-            <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Company Logo <span className="text-orange-500">*</span>
-                </label>
-                <div className="border border-gray-300 rounded p-2 flex items-center bg-white h-[42px]">
-                    <input type="file" className="hidden" id="logo-upload" {...register('logo')} />
-                    <label htmlFor="logo-upload"
-                           className="text-orange-500 text-sm font-medium cursor-pointer hover:underline">
-                        Upload Picture
-                    </label>
-                </div>
-            </div>
 
             <FormInput label="Company Website" required {...register('website')} error={errors.website}
+                       placeholder="URL"/>
+            <FormInput label="Company Imag Url" required {...register('logo')} error={errors.website}
                        placeholder="URL"/>
 
             <FormSelect
@@ -44,9 +33,15 @@ export const CompanyInfoTab = () => {
                 {...register('domain')}
                 error={errors.domain}
                 options={[
-                    {value: 'tech', label: 'Technology'},
-                    {value: 'finance', label: 'Finance'},
-                    {value: 'health', label: 'Healthcare'},
+                    {value: '0', label: 'INDUSTRY_UNSPECIFIED'},
+                    {value: '1', label: 'TECHNOLOGY'},
+                    {value: '2', label: 'FINANCE'},
+                    {value: '3', label: 'HEALTHCARE'},
+                    {value: '4', label: 'CONSTRUCTION'},
+                    {value: '5', label: 'RETAIL'},
+                    {value: '6', label: 'MANUFACTURING'},
+                    {value: '7', label: 'LOGISTICS'},
+                    {value: '-1', label: 'UNRECOGNIZED'},
                 ]}
             />
 

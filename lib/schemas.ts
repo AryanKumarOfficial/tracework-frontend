@@ -18,7 +18,7 @@ export const companyInfoSchema = z.object({
     domain: z.string().min(1, 'Please select a domain'),
     strength: z.string().min(1, 'Company strength is required'),
     description: z.string().min(10, 'Description must be at least 10 characters'),
-    logo: z.any().optional(), // Handle file validation separately or via refinement
+    logo: z.url('Invalid Url format')
 });
 
 export const contactInfoSchema = z.object({
