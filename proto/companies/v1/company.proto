@@ -134,6 +134,8 @@ message CompanyResponse {
   optional string gst = 16;
   optional string tan = 17;
   optional int32 strength = 18;
+  bool gst_verified = 19;
+  bool mca_verified = 20;
 }
 
 message CompanyEmptyResponse {
@@ -143,7 +145,7 @@ message CompanyEmptyResponse {
 
 // FR-II-001.5: Paginated Response
 message GetAllCompaniesResponse {
-  repeated CompanyResponse companies = 1;
+  repeated CompanyWithDetails companies = 1;
   int32 total = 2;
   int32 page = 3;
   int32 limit = 4;
@@ -269,6 +271,12 @@ message CompanyMetadata {
   optional string gst = 2;
   optional string tan = 3;
   optional int32 strength = 4;
+}
+
+message CompanyWithDetails {
+  CompanyResponse company = 1;
+  optional CompanyContactResponse contact = 2;
+  optional CompanyBankingResponse banking = 3;
 }
 
 // Service Definition
