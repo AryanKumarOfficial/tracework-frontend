@@ -1,10 +1,10 @@
 "use client";
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useCallback} from 'react';
 import {useForm, FormProvider} from 'react-hook-form';
 import {zodResolver} from '@hookform/resolvers/zod';
 import {useDispatch} from 'react-redux';
 import {setCredentials} from '@/lib/features/auth/authSlice';
-import {useAppSelector} from '@/lib/hooks'; // Ensure you have this hook or use useSelector directly
+import {useAppSelector} from '@/lib/hooks';
 import {
     companyInfoSchema,
     contactInfoSchema,
@@ -24,6 +24,9 @@ export default function MyProfile() {
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Status state
+    const [companyStatus, setCompanyStatus] = useState<string>('');
+
     // Get company ID from Redux state
     const {company} = useAppSelector((state) => state.auth);
     const dispatch = useDispatch();
@@ -40,64 +43,76 @@ export default function MyProfile() {
         shouldUnregister: false,
     });
 
+    // Watch all fields to determine completeness in real-time
+    const watchedValues = methods.watch();
+    const isProfileComplete = !!(
+        watchedValues.pan &&
+        watchedValues.gst &&
+        watchedValues.tan &&
+        watchedValues.accountNumber &&
+        watchedValues.ifscCode &&
+        watchedValues.bankName
+    );
+
+    const fetchProfile = useCallback(async () => {
+        try {
+            const res = await fetch('/api/companies/me', {
+                method: 'GET',
+                headers: {'Content-Type': 'application/json'},
+            });
+            const result = await res.json();
+            console.log(`Fetched profile: `, result)
+            if (result.success && result.data) {
+                const {company, contact, banking} = result.data;
+                console.log(`Company: `, company.industry);
+
+                dispatch(setCredentials({company}));
+                setCompanyStatus(company.status);
+
+                methods.reset({
+                    // Company Info
+                    companyName: company.company_name,
+                    email: company.email,
+                    description: company.description,
+                    domain: getDomainNumber(company.industry).toString(),
+                    logo: company.logo_url,
+                    website: company.website_url,
+                    pan: company.pan,
+                    gst: company.gst,
+                    tan: company.tan,
+                    strength: company.strength?.toString(),
+
+                    // Contact Info
+                    mobile: company.phone,
+                    address: company.address,
+                    state: contact?.state,
+                    city: contact?.city,
+                    pinCode: contact?.pin_code,
+                    linkedin: contact?.linkedin,
+                    instagram: contact?.instagram,
+                    twitter: contact?.twitter,
+
+                    // Banking Info
+                    accountHolderName: banking?.account_holder_name,
+                    accountNumber: banking?.account_number,
+                    bankName: banking?.bank_name,
+                    branchName: banking?.branch_name,
+                    ifscCode: banking?.ifsc_code,
+                    accountType: banking?.account_type || 'savings',
+                    confirmAccountNumber: banking?.account_number
+                });
+            }
+        } catch (error) {
+            console.error("Failed to load profile", error);
+        } finally {
+            setLoading(false);
+        }
+    }, [dispatch, methods]);
+
     // 1. Fetch Profile Data on Mount
     useEffect(() => {
-        const fetchProfile = async () => {
-            try {
-                const res = await fetch('/api/companies/me', {
-                    method: 'GET',
-                    headers: {'Content-Type': 'application/json'},
-                });
-                const result = await res.json();
-                console.log(`Fetched profile: `, result)
-                if (result.success && result.data) {
-                    const {company, contact, banking} = result.data;
-                    console.log(`Company: `, company.industry);
-
-                    dispatch(setCredentials({company}));
-
-                    methods.reset({
-                        // Company Info
-                        companyName: company.company_name, // Ensure casing matches API response
-                        email: company.email,
-                        description: company.description,
-                        domain: getDomainNumber(company.industry).toString(),
-                        logo: company.logo_url,
-                        website: company.website_url,
-                        pan: company.pan,
-                        gst: company.gst,
-                        tan: company.tan,
-                        strength: company.strength?.toString(),
-
-                        // Contact Info
-                        mobile: company.phone,
-                        address: company.address,
-                        state: contact?.state,
-                        city: contact?.city,
-                        pinCode: contact?.pin_code,
-                        linkedin: contact?.linkedin,
-                        instagram: contact?.instagram,
-                        twitter: contact?.twitter,
-
-                        // Banking Info
-                        accountHolderName: banking?.account_holder_name,
-                        accountNumber: banking?.account_number,
-                        bankName: banking?.account_number,
-                        branchName: banking?.branch_name,
-                        ifscCode: banking?.ifsc_code,
-                        accountType: 'savings', // Default or fetch if available
-                        confirmAccountNumber: banking?.account_number
-                    });
-                }
-            } catch (error) {
-                console.error("Failed to load profile", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
         fetchProfile();
-    }, [dispatch, methods]);
+    }, [fetchProfile]);
 
     const onSubmit = async (data: FormValues) => {
         if (!company?.id) {
@@ -107,6 +122,7 @@ export default function MyProfile() {
 
         setIsSubmitting(true);
         try {
+            // 1. Save the current tab data
             let payload: any = {};
             let updateType = '';
 
@@ -164,7 +180,8 @@ export default function MyProfile() {
 
             if (!res.ok) throw new Error(result.message || 'Update failed');
 
-            alert(`${tabs.find(t => t.id === activeTab)?.label} updated successfully!`);
+
+          await  fetchProfile();
 
         } catch (error: any) {
             console.error('Update failed:', error);
@@ -188,10 +205,33 @@ export default function MyProfile() {
         );
     }
 
+    // Determine Button Text
+    let saveButtonText = "Save Draft";
+    if (isProfileComplete) {
+        if (companyStatus === 'PENDING' || companyStatus === 'REJECTED') {
+            saveButtonText = "Save & Request Verification";
+        } else {
+            saveButtonText = "Save Changes";
+        }
+    }
+
     return (
         <div className="w-full max-w-5xl mx-auto">
-            <div className="mb-6">
+            <div className="mb-6 flex justify-between items-center">
                 <h1 className="text-2xl font-bold text-gray-800">My Profile</h1>
+
+                {/* Verification Status Badge */}
+                <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-600">Status:</span>
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                        companyStatus === 'ACTIVE' ? 'bg-green-100 text-green-800' :
+                            companyStatus === 'PENDING_REVIEW' ? 'bg-yellow-100 text-yellow-800' :
+                                companyStatus === 'REJECTED' ? 'bg-red-100 text-red-800' :
+                                    'bg-gray-100 text-gray-800'
+                    }`}>
+                        {companyStatus || 'UNKNOWN'}
+                    </span>
+                </div>
             </div>
 
             <FormProvider {...methods}>
@@ -226,6 +266,7 @@ export default function MyProfile() {
 
                     <div
                         className="fixed bottom-0 right-0 left-0 md:left-64 bg-white border-t border-gray-200 p-4 flex justify-end items-center gap-4 z-40 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+
                         <button
                             type="button"
                             disabled={isSubmitting}
@@ -237,11 +278,13 @@ export default function MyProfile() {
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className="px-6 py-2.5 bg-[#0a1128] text-white rounded-lg hover:bg-[#1a2340] font-medium text-sm transition-colors disabled:opacity-70 flex items-center gap-2"
+                            className={`px-6 py-2.5 text-white rounded-lg font-medium text-sm transition-colors disabled:opacity-70 flex items-center gap-2
+                             ${isProfileComplete && (companyStatus === 'PENDING' || companyStatus === 'REJECTED') ? 'bg-orange-600 hover:bg-orange-700' : 'bg-[#0a1128] hover:bg-[#1a2340]'}
+                            `}
                         >
                             {isSubmitting && <div
                                 className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
-                            Save
+                            {saveButtonText}
                         </button>
                     </div>
                 </form>

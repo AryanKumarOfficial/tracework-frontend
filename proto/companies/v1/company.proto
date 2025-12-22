@@ -69,7 +69,8 @@ message UpdateCompanyRequest {
 message UpdateCompanyStatusRequest {
   string id = 1;
   CompanyStatus status = 2;
-  optional string updated_by = 3;  // FR-II-001.4: Change tracking
+  optional string updated_by = 3;
+  // FR-II-001.4: Change tracking
 }
 
 message DeleteCompanyRequest {
@@ -79,7 +80,8 @@ message DeleteCompanyRequest {
 message VerifyCompanyRequest {
   string id = 1;
   string verification_type = 2;  // "GST" or "MCA"
-  bool status = 3;  // true = verified, false = failed
+  bool status = 3;
+  // true = verified, false = failed
 }
 
 // FR-II-001.5: Search and Filter Request
@@ -114,6 +116,11 @@ message GetCompanyUsersRequest {
   string company_id = 1;
 }
 
+// Request Verification Request (Added)
+message RequestVerificationRequest {
+  string company_id = 1;
+}
+
 // Response Messages
 message CompanyResponse {
   string id = 1;
@@ -134,6 +141,8 @@ message CompanyResponse {
   optional string gst = 16;
   optional string tan = 17;
   optional int32 strength = 18;
+  bool gst_verified = 19;
+  bool mca_verified = 20;
 }
 
 message CompanyEmptyResponse {
@@ -143,7 +152,7 @@ message CompanyEmptyResponse {
 
 // FR-II-001.5: Paginated Response
 message GetAllCompaniesResponse {
-  repeated CompanyResponse companies = 1;
+  repeated CompanyWithDetails companies = 1;
   int32 total = 2;
   int32 page = 3;
   int32 limit = 4;
@@ -271,6 +280,12 @@ message CompanyMetadata {
   optional int32 strength = 4;
 }
 
+message CompanyWithDetails {
+  CompanyResponse company = 1;
+  optional CompanyContactResponse contact = 2;
+  optional CompanyBankingResponse banking = 3;
+}
+
 // Service Definition
 service CompanyService {
   rpc CreateCompany(CreateCompanyRequest) returns (CompanyResponse);
@@ -290,12 +305,11 @@ service CompanyService {
   rpc UpdateCompanyBanking(UpdateCompanyBankingRequest) returns (CompanyBankingResponse);
   rpc VerifyCompanyBanking(VerifyBankingRequest) returns (CompanyBankingResponse);
 
+  // Added Method
+  rpc RequestVerification(RequestVerificationRequest) returns (CompanyEmptyResponse);
 
   // auths
   rpc Register(RegisterCompanyRequest) returns (RegisterCompanyResponse);
   rpc VerifyEmail(VerifyEmailRequest) returns (VerifyEmailResponse);
   rpc ValidateCredentials(ValidateCredentialsRequest) returns (ValidateCredentialsResponse);
-
-
-
 }
