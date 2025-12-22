@@ -69,7 +69,8 @@ message UpdateCompanyRequest {
 message UpdateCompanyStatusRequest {
   string id = 1;
   CompanyStatus status = 2;
-  optional string updated_by = 3;  // FR-II-001.4: Change tracking
+  optional string updated_by = 3;
+  // FR-II-001.4: Change tracking
 }
 
 message DeleteCompanyRequest {
@@ -79,7 +80,8 @@ message DeleteCompanyRequest {
 message VerifyCompanyRequest {
   string id = 1;
   string verification_type = 2;  // "GST" or "MCA"
-  bool status = 3;  // true = verified, false = failed
+  bool status = 3;
+  // true = verified, false = failed
 }
 
 // FR-II-001.5: Search and Filter Request
@@ -111,6 +113,11 @@ message UpdateUserRoleRequest {
 }
 
 message GetCompanyUsersRequest {
+  string company_id = 1;
+}
+
+// Request Verification Request (Added)
+message RequestVerificationRequest {
   string company_id = 1;
 }
 
@@ -298,12 +305,11 @@ service CompanyService {
   rpc UpdateCompanyBanking(UpdateCompanyBankingRequest) returns (CompanyBankingResponse);
   rpc VerifyCompanyBanking(VerifyBankingRequest) returns (CompanyBankingResponse);
 
+  // Added Method
+  rpc RequestVerification(RequestVerificationRequest) returns (CompanyEmptyResponse);
 
   // auths
   rpc Register(RegisterCompanyRequest) returns (RegisterCompanyResponse);
   rpc VerifyEmail(VerifyEmailRequest) returns (VerifyEmailResponse);
   rpc ValidateCredentials(ValidateCredentialsRequest) returns (ValidateCredentialsResponse);
-
-
-
 }
