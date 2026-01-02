@@ -1,104 +1,317 @@
 'use client';
 
-import { useState } from 'react';
-import { Upload } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Upload, X, Edit2, Plus, Play } from 'lucide-react';
+
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
+
+
+// Enum mappings
+const GENDER_MAP = {
+  toNumber: { 'male': '1', 'female': '2', 'others': '3' },
+  toString: { '1': 'male', '2': 'female', '3': 'others' }
+};
+
+const EXPERIENCE_MAP = {
+  toNumber: { 'fresher': '1', 'experienced': '2' },
+  toString: { '1': 'fresher', '2': 'experienced' }
+};
+
+const AVAILABILITY_MAP = {
+  toNumber: { 'immediately': '1', 'within_a_week': '2', 'within_15_days': '3' },
+  toString: { '1': 'immediately', '2': 'within_a_week', '3': 'within_15_days' }
+};
+
+// Photography service categories
+const PHOTOGRAPHY_CATEGORIES = [
+  'Wedding Photography',
+  'Portrait Photography',
+  'Event Photography',
+  'Commercial Photography',
+  'Fine Art Photography',
+  'Sports Photography',
+  'Travel Photography',
+  'Pet Photography',
+  'Newborn and Maternity Photography',
+  'Architectural Photography',
+  'Documentary Photography',
+  'Candid Photography',
+  'Fashion Photography',
+  'Food Photography',
+  'Product Photography',
+];
+
+// Mock API client
+const apiClient = {
+  getToken() {
+    if (typeof document !== 'undefined') {
+      const cookies = document.cookie.split(';');
+      const tokenCookie = cookies.find(c => c.trim().startsWith('token='));
+      if (tokenCookie) return tokenCookie.split('=')[1];
+    }
+    return null;
+  },
+
+  async request(endpoint: string, options: RequestInit = {}): Promise<any> {
+    try {
+      const token = this.getToken();
+      const fullUrl = `${API_BASE_URL}${endpoint}`;
+      console.log('📤 API Request:', {
+        url: fullUrl,
+        method: options.method || 'GET',
+        hasToken: !!token,
+        body: options.body ? JSON.parse(options.body as string) : null,
+      });
+
+      const response = await fetch(fullUrl, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+          ...options.headers,
+        },
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        console.error('❌ API Error:', error);
+        throw new Error(error.message || error.error || 'Request failed');
+      }
+      
+      const data = await response.json();
+      console.log('✅ API Response:', data);
+      return data;
+    } catch (error: any) {
+      console.error('❌ API request failed:', error);
+      throw error;
+    }
+  },
+
+  async uploadFile(file, type) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('type', type);
+    
+    const token = this.getToken();
+    const response = await fetch(`${API_BASE_URL}/api/v1/users/upload`, {
+      method: 'POST',
+      body: formData,
+      headers: { ...(token && { 'Authorization': `Bearer ${token}` }) },
+      credentials: 'include',
+    });
+
+    if (!response.ok) throw new Error('Upload failed');
+    return response.json();
+  }
+};
 
 export default function ProfilePage() {
+  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('basic');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  
+  // Modals
+  const [showServiceModal, setShowServiceModal] = useState(false);
+  const [showServiceCategoryModal, setShowServiceCategoryModal] = useState(false);
+  const [showPortfolioModal, setShowPortfolioModal] = useState(false);
+  const [editingService, setEditingService] = useState(null);
+  const [editingPortfolio, setEditingPortfolio] = useState(null);
+  
+  // Form data
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    phone: '',
-    location: 'Delhi',
-    dateDay: '',
-    dateMonth: '',
-    dateYear: '',
-    gender: 'male',
-    experience: 'fresher',
-    availability: 'immediately',
-    address: '',
+    phoneNumber: '',
+    location: '',
+    dobDate: '',
+    dobMonth: '',
+    dobYear: '',
+    gender: '',
+    experience: '',
+    availability: '',
+    permanentAddress: '',
     hometown: '',
     pincode: '',
+    profilePicture: '',
     languages: [{ language: 'English', proficiency: 'Intermediate', read: true, write: false, speak: false }],
   });
 
-  const [activeTab, setActiveTab] = useState('basic');
-  const [showServiceModal, setShowServiceModal] = useState(false);
-  const [showServicePicker, setShowServicePicker] = useState(false);
-  const [newService, setNewService] = useState({
-    name: '',
+  // Services data
+  const [services, setServices] = useState<any[]>([]);
+  const [serviceForm, setServiceForm] = useState<{
+    type: string;
+    description: string;
+    experienceYears: string | number;
+    experienceMonths: string | number;
+  }>({
+    type: '',
     description: '',
-    yearsExp: '',
-    monthsExp: ''
+    experienceYears: '',
+    experienceMonths: '',
   });
-  const [services, setServices] = useState([
-    {
-      id: 1,
-      category: 'Photography',
-      type: 'Portrait Photography',
-      description: 'Capturing portraits of individuals or groups',
-      experience: '2-3 years'
-    },
-    {
-      id: 2,
-      category: 'Photography',
-      type: 'Wedding Photography',
-      description: 'Documenting weddings and related events',
-      experience: '5-6 years'
-    }
-  ]);
 
-  const [showProjectModal, setShowProjectModal] = useState(false);
-  const [projectType, setProjectType] = useState('');
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
-  const [newProject, setNewProject] = useState({
-    name: '',
-    caption: '',
-    description: '',
-    tags: '',
-    category: '',
-    industry: ''
+  // Portfolio data
+  const [portfolio, setPortfolio] = useState<any[]>([]);
+  const [portfolioForm, setPortfolioForm] = useState<{
+    projectName: string;
+    projectCaption: string;
+    projectTags: string[];
+    projectCategory: string;
+    visibility: string;
+    media: string[];
+    mediaType: 'image' | 'video';
+  }>({
+    projectName: '',
+    projectCaption: '',
+    projectTags: [],
+    projectCategory: '',
+    visibility: 'public',
+    media: [],
+    mediaType: 'image',
   });
-  const [photos, setPhotos] = useState([
-    { id: 1, type: 'Wedding Photography', caption: 'Capturing the beauty and joy during my cousin brother\'s wedding' },
-    { id: 2, type: 'Fashion Photography', caption: 'Fashion is the fashion industry\'s capturing stunning fashion moments' },
-    { id: 3, type: 'Food Photography', caption: 'Showcasing colors and textures for various clients in the area' }
-  ]);
-  const [videos, setVideos] = useState([
-    { id: 1, type: 'Wedding Photography', caption: 'Capturing the beauty and joy during my cousin brother\'s wedding' },
-    { id: 2, type: 'Product Photography', caption: 'Providing high-quality for advertisement & brochure' },
-    { id: 3, type: 'Event Photography', caption: 'Capturing vibrant colors and emotions from the event that highlights' }
-  ]);
+  const [portfolioFiles, setPortfolioFiles] = useState<File[]>([]);
 
-  const serviceCategories = [
-    'Wedding Photography',
-    'Portrait Photography',
-    'Event Photography',
-    'Commercial Photography',
-    'Fine Art Photography',
-    'Sports Photography',
-    'Travel Photography',
-    'Pet Photography',
-    'Newborn and Maternity Photography',
-    'Architectural Photography',
-    'Documentary Photography',
-    'Candid Photography',
-    'Fashion Photography',
-    'Food Photography',
-    'Product Photography'
+  const genderOptions = [
+    { value: '1', label: 'Male' },
+    { value: '2', label: 'Female' },
+    { value: '3', label: 'Others' }
   ];
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }));
+  const experienceOptions = [
+    { value: '1', label: 'Fresher' },
+    { value: '2', label: 'Experienced' }
+  ];
+
+  const availabilityOptions = [
+    { value: '1', label: 'Immediately' },
+    { value: '2', label: 'Within a week' },
+    { value: '3', label: 'Within 15 days' }
+  ];
+
+  const dates = Array.from({ length: 31 }, (_, i) => i + 1);
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const years = Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i);
+
+  useEffect(() => {
+    loadProfile();
+    if (activeTab === 'services') loadServices();
+    if (activeTab === 'portfolio') loadPortfolio();
+  }, [activeTab]);
+
+  const showSuccess = (message) => {
+    setSuccessMessage(message);
+    setShowSuccessModal(true);
+    setTimeout(() => {
+      setShowSuccessModal(false);
+      setSuccessMessage('');
+    }, 3000);
   };
 
-  const handleLanguageChange = (index: number, field: string, value: any) => {
+  const loadProfile = async () => {
+    try {
+      setLoading(true);
+      const result = await apiClient.request('/api/v1/users/me');
+
+      const user = result.user || result.data?.user || result.data || result;
+      if (!user) throw new Error('Failed to load user data');
+
+      let dobDate = '', dobMonth = '', dobYear = '';
+      const dateOfBirth = user.dateOfBirth || user.date_of_birth;
+      if (dateOfBirth) {
+        const date = new Date(dateOfBirth);
+        if (!isNaN(date.getTime())) {
+          dobDate = String(date.getDate());
+          dobMonth = String(date.getMonth() + 1);
+          dobYear = String(date.getFullYear());
+        }
+      }
+
+      const genderValue = user.gender ? (GENDER_MAP.toNumber[String(user.gender)] || String(user.gender)) : '';
+      const experienceValue = user.experience ? (EXPERIENCE_MAP.toNumber[String(user.experience)] || String(user.experience)) : '';
+      const availabilityValue = user.availability ? (AVAILABILITY_MAP.toNumber[String(user.availability)] || String(user.availability)) : '';
+
+      setFormData({
+        name: user.name || '',
+        email: user.email || '',
+        phoneNumber: user.phoneNumber || user.phone_number || '',
+        location: user.location || '',
+        dobDate,
+        dobMonth,
+        dobYear,
+        gender: genderValue,
+        experience: experienceValue,
+        availability: availabilityValue,
+        permanentAddress: user.permanentAddress || user.permanent_address || '',
+        hometown: user.hometown || '',
+        pincode: user.pincode || '',
+        profilePicture: user.profilePicture || user.profile_picture || '',
+        languages: user.languages && user.languages.length > 0 ? user.languages : [{ language: 'English', proficiency: 'Intermediate', read: true, write: false, speak: false }],
+      });
+    } catch (error) {
+      showSuccess(error.message || 'Failed to load profile');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadServices = async () => {
+    try {
+      console.log('📥 Loading services...');
+      const result = await apiClient.request('/api/v1/users/services');
+      console.log('📥 Services API Response:', result);
+      
+      let servicesData = [];
+      if (result.success && result.data?.services) {
+        servicesData = result.data.services;
+      } else if (Array.isArray(result.services)) {
+        servicesData = result.services;
+      } else if (result.data && Array.isArray(result.data)) {
+        servicesData = result.data;
+      } else if (Array.isArray(result)) {
+        servicesData = result;
+      }
+      
+      console.log('📥 Parsed services:', servicesData);
+      setServices(servicesData);
+    } catch (error: any) {
+      console.error('❌ Failed to load services:', error);
+      showSuccess(error.message || 'Failed to load services');
+      setServices([]);
+    }
+  };
+
+  const loadPortfolio = async () => {
+    try {
+      const result = await apiClient.request('/api/v1/users/portfolio');
+      console.log('📥 Portfolio API Response:', result);
+      
+      let portfolioData = [];
+      if (result.success && result.data?.portfolio) {
+        portfolioData = result.data.portfolio;
+      } else if (Array.isArray(result.portfolio)) {
+        portfolioData = result.portfolio;
+      } else if (result.data && Array.isArray(result.data)) {
+        portfolioData = result.data;
+      } else if (Array.isArray(result)) {
+        portfolioData = result;
+      }
+      
+      setPortfolio(portfolioData);
+    } catch (error: any) {
+      console.error('Failed to load portfolio:', error);
+      setPortfolio([]);
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleLanguageChange = (index, field, value) => {
     const newLanguages = [...formData.languages];
     newLanguages[index] = { ...newLanguages[index], [field]: value };
     setFormData(prev => ({ ...prev, languages: newLanguages }));
@@ -111,65 +324,309 @@ export default function ProfilePage() {
     }));
   };
 
-  const showSuccess = (message: string) => {
-    setSuccessMessage(message);
-    setShowSuccessModal(true);
-    
-    setTimeout(() => {
-      setShowSuccessModal(false);
-      setSuccessMessage('');
-    }, 2000);
+  const removeLanguage = (index) => {
+    const newLanguages = formData.languages.filter((_, i) => i !== index);
+    setFormData(prev => ({ ...prev, languages: newLanguages }));
   };
 
-  const handleSubmit = () => {
-    console.log(formData);
-    showSuccess('Profile Saved Successfully');
-  };
+  const handleSubmit = async () => {
+    try {
+      setLoading(true);
 
-  const handleAddService = () => {
-    if (newService.name && newService.description) {
-      const expYears = newService.yearsExp || '0';
-      const expMonths = newService.monthsExp || '0';
-      const experience = `${expYears}-${expMonths} years`;
-      
-      setServices([...services, {
-        id: services.length + 1,
-        category: 'Photography',
-        type: newService.name,
-        description: newService.description,
-        experience
-      }]);
-      
-      setNewService({ name: '', description: '', yearsExp: '', monthsExp: '' });
-      setShowServiceModal(false);
-      setShowServicePicker(false);
-      showSuccess('Service Added Successfully');
-    }
-  };
-
-  const handleAddProject = () => {
-    if (newProject.name && newProject.caption) {
-      const newItem = {
-        id: Date.now(),
-        type: newProject.name,
-        caption: newProject.caption
-      };
-
-      if (projectType === 'photo') {
-        setPhotos([...photos, newItem]);
-      } else {
-        setVideos([...videos, newItem]);
+      let dateOfBirth = '';
+      if (formData.dobYear && formData.dobMonth && formData.dobDate) {
+        const month = formData.dobMonth.padStart(2, '0');
+        const date = formData.dobDate.padStart(2, '0');
+        dateOfBirth = `${formData.dobYear}-${month}-${date}`;
       }
 
-      setNewProject({ name: '', caption: '', description: '', tags: '', category: '', industry: '' });
-      setShowProjectModal(false);
-      showSuccess('Project Uploaded Successfully');
+      const updateData = {};
+      if (formData.name) updateData.name = formData.name;
+      if (formData.phoneNumber) updateData.phoneNumber = formData.phoneNumber;
+      if (formData.location) updateData.location = formData.location;
+      if (formData.permanentAddress) updateData.permanentAddress = formData.permanentAddress;
+      if (formData.hometown) updateData.hometown = formData.hometown;
+      if (formData.pincode) updateData.pincode = formData.pincode;
+      if (formData.profilePicture) updateData.profilePicture = formData.profilePicture;
+      if (formData.languages) updateData.languages = formData.languages;
+      if (dateOfBirth) updateData.dateOfBirth = dateOfBirth;
+      if (formData.gender) updateData.gender = Number(formData.gender);
+      if (formData.experience) updateData.experience = Number(formData.experience);
+      if (formData.availability) updateData.availability = Number(formData.availability);
+
+      const result = await apiClient.request('/api/v1/users/profile', {
+        method: 'PUT',
+        body: JSON.stringify(updateData),
+      });
+
+      if (result.success) {
+        showSuccess('Profile Saved Successfully');
+        await loadProfile();
+      } else {
+        showSuccess(result.error || 'Failed to save profile');
+      }
+    } catch (error) {
+      showSuccess(error.message || 'Failed to save profile');
+    } finally {
+      setLoading(false);
     }
   };
+
+  const handleFileUpload = async (e, type) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 50 * 1024 * 1024) {
+      showSuccess('File size must be less than 50MB');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const result = await apiClient.uploadFile(file, type);
+      
+      if (result.success && result.data?.url) {
+        if (type === 'profile') {
+          setFormData(prev => ({ ...prev, profilePicture: result.data.url }));
+          showSuccess('Profile picture uploaded successfully');
+        }
+      } else {
+        showSuccess('Failed to upload file');
+      }
+    } catch (error) {
+      showSuccess(error.message || 'Failed to upload file');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openServiceModal = (service = null) => {
+    if (service) {
+      setEditingService(service);
+      setServiceForm({
+        type: service.type,
+        description: service.description,
+        experienceYears: service.experienceYears,
+        experienceMonths: service.experienceMonths,
+      });
+    } else {
+      setEditingService(null);
+      setServiceForm({
+        type: '',
+        description: '',
+        experienceYears: '',
+        experienceMonths: '',
+      });
+    }
+    setShowServiceModal(true);
+  };
+
+  const handleServiceSubmit = async () => {
+    try {
+      if (!serviceForm.type) {
+        showSuccess('Please select a service type');
+        return;
+      }
+      
+      setLoading(true);
+      
+      const payload = {
+        type: serviceForm.type,
+        description: serviceForm.description,
+        experienceYears: Number(serviceForm.experienceYears) || 0,
+        experienceMonths: Number(serviceForm.experienceMonths) || 0,
+      };
+      
+      console.log('📤 Service payload:', payload);
+      
+      let result;
+      if (editingService) {
+        result = await apiClient.request(`/api/v1/users/services/${editingService.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        });
+        console.log('📥 Update service result:', result);
+      } else {
+        result = await apiClient.request('/api/v1/users/services', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        console.log('📥 Create service result:', result);
+      }
+      
+      if (result.success || result.message) {
+        showSuccess(editingService ? 'Service updated successfully' : 'Service added successfully');
+        await loadServices();
+        setShowServiceModal(false);
+        setShowServiceCategoryModal(false);
+      } else {
+        showSuccess(result.error || 'Failed to save service');
+      }
+    } catch (error: any) {
+      console.error('❌ Service submit error:', error);
+      showSuccess(error.message || 'Failed to save service');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteService = async (serviceId: string) => {
+    if (!confirm('Are you sure you want to delete this service?')) return;
+    
+    try {
+      setLoading(true);
+      const result = await apiClient.request(`/api/v1/users/services/${serviceId}`, {
+        method: 'DELETE',
+      });
+      
+      console.log('📥 Delete service result:', result);
+      
+      if (result.success || result.message) {
+        showSuccess('Service deleted successfully');
+        await loadServices();
+      } else {
+        showSuccess(result.error || 'Failed to delete service');
+      }
+    } catch (error: any) {
+      console.error('❌ Delete service error:', error);
+      showSuccess(error.message || 'Failed to delete service');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openPortfolioModal = (item = null) => {
+    if (item) {
+      setEditingPortfolio(item);
+      setPortfolioForm({
+        projectName: item.projectName,
+        projectCaption: item.projectCaption,
+        projectTags: item.projectTags || [],
+        projectCategory: item.projectCategory,
+        visibility: item.visibility || 'public',
+        media: item.media || [],
+        mediaType: item.mediaType || 'image',
+      });
+    } else {
+      setEditingPortfolio(null);
+      setPortfolioForm({
+        projectName: '',
+        projectCaption: '',
+        projectTags: [],
+        projectCategory: '',
+        visibility: 'public',
+        media: [],
+        mediaType: 'image',
+      });
+    }
+    setPortfolioFiles([]);
+    setShowPortfolioModal(true);
+  };
+
+  const handlePortfolioFileSelect = (e) => {
+    const files = Array.from(e.target.files || []);
+    setPortfolioFiles(files);
+  };
+
+  const handlePortfolioSubmit = async () => {
+    try {
+      if (!portfolioForm.projectName || !portfolioForm.projectCategory) {
+        showSuccess('Please fill in all required fields');
+        return;
+      }
+
+      setLoading(true);
+
+      const uploadedUrls: string[] = [];
+      for (const file of portfolioFiles) {
+        try {
+          const result = await apiClient.uploadFile(file, 'portfolio');
+          console.log('📥 File upload result:', result);
+          if (result.success && result.data?.url) {
+            uploadedUrls.push(result.data.url);
+          } else if (result.data?.url) {
+            uploadedUrls.push(result.data.url);
+          }
+        } catch (uploadError) {
+          console.error('❌ File upload error:', uploadError);
+        }
+      }
+
+      const finalMedia = [...portfolioForm.media, ...uploadedUrls];
+      
+      const payload = {
+        projectName: portfolioForm.projectName,
+        projectCaption: portfolioForm.projectCaption,
+        projectTags: portfolioForm.projectTags,
+        projectCategory: portfolioForm.projectCategory,
+        visibility: portfolioForm.visibility,
+        media: finalMedia,
+        mediaType: portfolioForm.mediaType,
+      };
+      
+      console.log('📤 Portfolio payload:', payload);
+
+      if (editingPortfolio) {
+        const result = await apiClient.request(`/api/v1/users/portfolio/${editingPortfolio.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        });
+        
+        console.log('📥 Update portfolio result:', result);
+        showSuccess('Portfolio updated successfully');
+      } else {
+        const result = await apiClient.request('/api/v1/users/portfolio', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        
+        console.log('📥 Create portfolio result:', result);
+        showSuccess('Portfolio item added successfully');
+      }
+
+      await loadPortfolio();
+      setShowPortfolioModal(false);
+    } catch (error: any) {
+      console.error('❌ Portfolio submit error:', error);
+      showSuccess(error.message || 'Failed to save portfolio item');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deletePortfolio = async (portfolioId: string) => {
+    if (!confirm('Are you sure you want to delete this portfolio item?')) return;
+    
+    try {
+      const result = await apiClient.request(`/api/v1/users/portfolio/${portfolioId}`, {
+        method: 'DELETE',
+      });
+      
+      if (result.success) {
+        showSuccess('Portfolio item deleted successfully');
+        await loadPortfolio();
+      } else {
+        showSuccess(result.error || 'Failed to delete portfolio item');
+      }
+    } catch (error: any) {
+      showSuccess(error.message || 'Failed to delete portfolio item');
+    }
+  };
+
+  if (loading && !formData.name) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
-      {/* Reusable Success Modal - Now smaller popup */}
+      {/* Success Modal */}
       {showSuccessModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="fixed inset-0 bg-black bg-opacity-30" onClick={() => setShowSuccessModal(false)}></div>
@@ -184,270 +641,82 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Project Modal */}
-      {showProjectModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="grid grid-cols-1 md:grid-cols-2">
-              {/* Left Side - Upload Section */}
-              <div className="p-8 border-r border-gray-200">
-                <h2 className="text-xl font-semibold mb-8">Add Your Project</h2>
-                
-                <div className="flex gap-8 justify-center">
-                  <button
-                    onClick={() => setProjectType('photo')}
-                    className={`flex flex-col items-center gap-3 p-6 rounded-lg border-2 ${
-                      projectType === 'photo' ? 'border-orange-500 bg-orange-50' : 'border-gray-200'
-                    }`}
-                  >
-                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-                      <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                    </div>
-                    <span className="text-sm font-medium">Image</span>
-                  </button>
-
-                  <button
-                    onClick={() => setProjectType('video')}
-                    className={`flex flex-col items-center gap-3 p-6 rounded-lg border-2 ${
-                      projectType === 'video' ? 'border-orange-500 bg-orange-50' : 'border-gray-200'
-                    }`}
-                  >
-                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-                      <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                    <span className="text-sm font-medium">Video</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Right Side - Details Form */}
-              <div className="p-8 bg-gray-50">
-                <h3 className="text-lg font-semibold mb-6">Add Project Details</h3>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Project Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      value={newProject.name}
-                      onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
-                      placeholder="Enter project title"
-                      className="w-full border border-gray-300 p-2.5 rounded text-sm bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Project Caption <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      value={newProject.caption}
-                      onChange={(e) => setNewProject({ ...newProject, caption: e.target.value })}
-                      placeholder="Write a caption for the project"
-                      className="w-full border border-gray-300 p-2.5 rounded text-sm bg-white"
-                    />
-                    <div className="text-right text-xs text-gray-500 mt-1">
-                      {500 - (newProject.caption?.length || 0)} Character(s) left
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Project Tags <span className="text-gray-400">(Add upto 5)</span>
-                    </label>
-                    <input
-                      value={newProject.tags}
-                      onChange={(e) => setNewProject({ ...newProject, tags: e.target.value })}
-                      placeholder="Add 5 keywords related to your project"
-                      className="w-full border border-gray-300 p-2.5 rounded text-sm bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Project Category <span className="text-gray-400">(Add upto 3)</span>
-                    </label>
-                    <input
-                      value={newProject.category}
-                      onChange={(e) => setNewProject({ ...newProject, category: e.target.value })}
-                      placeholder="Add Categories"
-                      className="w-full border border-gray-300 p-2.5 rounded text-sm bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Industry
-                    </label>
-                    <select
-                      value={newProject.industry}
-                      onChange={(e) => setNewProject({ ...newProject, industry: e.target.value })}
-                      className="w-full border border-gray-300 p-2.5 rounded text-sm bg-white"
-                    >
-                      <option value="">Add Categories</option>
-                      <option value="photography">Photography</option>
-                      <option value="videography">Videography</option>
-                      <option value="design">Design</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-3 mt-8">
-                  <button
-                    onClick={() => {
-                      setShowProjectModal(false);
-                      setProjectType('');
-                      setNewProject({ name: '', caption: '', description: '', tags: '', category: '', industry: '' });
-                    }}
-                    className="px-6 py-2 border border-gray-300 rounded text-sm font-medium hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleAddProject}
-                    className="px-8 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-800"
-                  >
-                    Upload
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Service Modal */}
       {showServiceModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full p-6 relative max-h-[90vh] overflow-y-auto">
-            <button
-              onClick={() => {
-                setShowServiceModal(false);
-                setShowServicePicker(false);
-                setNewService({ name: '', description: '', yearsExp: '', monthsExp: '' });
-              }}
-              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-gray-200 rounded-full hover:bg-gray-300"
-            >
-              ✕
-            </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setShowServiceModal(false)}></div>
+          <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-semibold">Add Service</h3>
+              <button onClick={() => setShowServiceModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-            <h2 className="text-xl font-semibold mb-6">Add Service</h2>
-
-            <div className="space-y-6">
+            <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Service Name
-                </label>
-                <div className="relative">
-                  <input
-                    value={newService.name}
-                    onChange={(e) => setNewService({ ...newService, name: e.target.value })}
-                    onClick={() => setShowServicePicker(true)}
-                    placeholder="Type a service you provide"
-                    className="w-full border border-gray-300 p-2.5 rounded text-sm pr-8"
-                    readOnly
-                  />
-                  <button
-                    onClick={() => setShowServicePicker(!showServicePicker)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2"
-                  >
-                    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                </div>
-
-                {showServicePicker && (
-                  <div className="absolute bg-white border border-gray-300 rounded-lg shadow-lg mt-1 w-80 max-h-96 overflow-y-auto z-10">
-                    <div className="p-3 border-b">
-                      <h3 className="font-semibold">Choose Service</h3>
-                    </div>
-                    <div className="p-3">
-                      {serviceCategories.map((service) => (
-                        <label key={service} className="flex items-center gap-3 py-2 hover:bg-gray-50 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="serviceCategory"
-                            checked={newService.name === service}
-                            onChange={() => {
-                              setNewService({ ...newService, name: service });
-                              setShowServicePicker(false);
-                            }}
-                            className="w-4 h-4 text-orange-500"
-                          />
-                          <span className="text-sm text-gray-700">{service}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <label className="block text-sm font-medium text-gray-700 mb-2">Service Name</label>
+                <input
+                  type="text"
+                  placeholder="Type a service you provide"
+                  value={serviceForm.type}
+                  onClick={() => setShowServiceCategoryModal(true)}
+                  readOnly
+                  className="w-full border border-gray-300 p-2.5 rounded text-sm cursor-pointer"
+                />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Service Description
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Service Description</label>
                 <textarea
-                  value={newService.description}
-                  onChange={(e) => setNewService({ ...newService, description: e.target.value })}
                   placeholder="Write a short description for the service you provide"
-                  className="w-full border border-gray-300 p-2.5 rounded text-sm h-32 resize-none"
+                  value={serviceForm.description}
+                  onChange={(e) => setServiceForm(prev => ({ ...prev, description: e.target.value }))}
+                  className="w-full border border-gray-300 p-2.5 rounded text-sm resize-none"
+                  rows={4}
                   maxLength={4000}
                 />
-                <div className="text-right text-xs text-gray-500 mt-1">
-                  {4000 - (newService.description?.length || 0)} Character(s) left
-                </div>
+                <p className="text-xs text-gray-500 text-right mt-1">{serviceForm.description.length}/4000 Character(s) left</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Total Experience
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Total Experience</label>
                 <div className="grid grid-cols-2 gap-4">
                   <select
-                    value={newService.yearsExp}
-                    onChange={(e) => setNewService({ ...newService, yearsExp: e.target.value })}
+                    value={serviceForm.experienceYears}
+                    onChange={(e) => setServiceForm(prev => ({ ...prev, experienceYears: e.target.value }))}
                     className="border border-gray-300 p-2.5 rounded text-sm"
                   >
                     <option value="">Years</option>
                     {Array.from({ length: 51 }, (_, i) => (
-                      <option key={i} value={i}>{i}</option>
+                      <option key={i} value={i}>{i} {i === 1 ? 'Year' : 'Years'}</option>
                     ))}
                   </select>
                   <select
-                    value={newService.monthsExp}
-                    onChange={(e) => setNewService({ ...newService, monthsExp: e.target.value })}
+                    value={serviceForm.experienceMonths}
+                    onChange={(e) => setServiceForm(prev => ({ ...prev, experienceMonths: e.target.value }))}
                     className="border border-gray-300 p-2.5 rounded text-sm"
                   >
                     <option value="">Months</option>
                     {Array.from({ length: 12 }, (_, i) => (
-                      <option key={i} value={i}>{i}</option>
+                      <option key={i} value={i}>{i} {i === 1 ? 'Month' : 'Months'}</option>
                     ))}
                   </select>
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end gap-4 mt-8">
+            <div className="flex gap-3 mt-6">
               <button
-                onClick={() => {
-                  setShowServiceModal(false);
-                  setShowServicePicker(false);
-                  setNewService({ name: '', description: '', yearsExp: '', monthsExp: '' });
-                }}
-                className="px-6 py-2 border border-gray-300 rounded text-sm font-medium hover:bg-gray-50"
+                onClick={() => setShowServiceModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded text-sm font-medium hover:bg-gray-50"
               >
                 Cancel
               </button>
               <button
-                onClick={handleAddService}
-                className="px-8 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-800"
+                onClick={handleServiceSubmit}
+                disabled={loading}
+                className="flex-1 px-4 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
               >
                 Save
               </button>
@@ -456,354 +725,350 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {/* Service Category Modal */}
+      {showServiceCategoryModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setShowServiceCategoryModal(false)}></div>
+          <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6 max-h-[80vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-4">Choose Service</h3>
+            <div className="space-y-2">
+              {PHOTOGRAPHY_CATEGORIES.map((category) => (
+                <label key={category} className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded cursor-pointer">
+                  <input
+                    type="radio"
+                    name="serviceCategory"
+                    checked={serviceForm.type === category}
+                    onChange={() => {
+                      setServiceForm(prev => ({ ...prev, type: category }));
+                      setShowServiceCategoryModal(false);
+                    }}
+                    className="w-4 h-4 text-orange-500"
+                  />
+                  <span className="text-sm text-gray-700">{category}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Portfolio Modal */}
+      {showPortfolioModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setShowPortfolioModal(false)}></div>
+          <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b p-6">
+              <h3 className="text-lg font-semibold">Add Your Project</h3>
+            </div>
+
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <div className="mb-4">
+                    <div className="flex gap-4 mb-4">
+                      <button
+                        onClick={() => setPortfolioForm(prev => ({ ...prev, mediaType: 'image' }))}
+                        className={`flex-1 p-8 border-2 rounded-lg flex flex-col items-center gap-2 ${
+                          portfolioForm.mediaType === 'image' ? 'border-orange-500 bg-orange-50' : 'border-gray-300'
+                        }`}
+                      >
+                        <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
+                          <Upload className="w-6 h-6 text-gray-600" />
+                        </div>
+                        <span className="text-sm font-medium">Image</span>
+                      </button>
+                      <button
+                        onClick={() => setPortfolioForm(prev => ({ ...prev, mediaType: 'video' }))}
+                        className={`flex-1 p-8 border-2 rounded-lg flex flex-col items-center gap-2 ${
+                          portfolioForm.mediaType === 'video' ? 'border-orange-500 bg-orange-50' : 'border-gray-300'
+                        }`}
+                      >
+                        <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
+                          <Play className="w-6 h-6 text-gray-600" />
+                        </div>
+                        <span className="text-sm font-medium">Video</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <label className="block">
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-orange-500 hover:bg-orange-50">
+                      <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                      <p className="text-sm text-gray-600">Click to upload {portfolioForm.mediaType}s</p>
+                      <p className="text-xs text-gray-400 mt-1">Max 50MB</p>
+                    </div>
+                    <input
+                      type="file"
+                      accept={portfolioForm.mediaType === 'image' ? 'image/*' : 'video/*'}
+                      multiple
+                      onChange={handlePortfolioFileSelect}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {portfolioFiles.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-sm font-medium mb-2">{portfolioFiles.length} file(s) selected</p>
+                      <div className="space-y-1">
+                        {portfolioFiles.map((file, i) => (
+                          <p key={i} className="text-xs text-gray-600">{file.name}</p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right side - Details */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Project Name</label>
+                    <input
+                      type="text"
+                      placeholder="Type name as a profile"
+                      value={portfolioForm.projectName}
+                      onChange={(e) => setPortfolioForm(prev => ({ ...prev, projectName: e.target.value }))}
+                      className="w-full border border-gray-300 p-2.5 rounded text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Write a Caption for the project</label>
+                    <textarea
+                      placeholder="Type here..."
+                      value={portfolioForm.projectCaption}
+                      onChange={(e) => setPortfolioForm(prev => ({ ...prev, projectCaption: e.target.value }))}
+                      className="w-full border border-gray-300 p-2.5 rounded text-sm resize-none"
+                      rows={3}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Project Category</label>
+                    <select
+                      value={portfolioForm.projectCategory}
+                      onChange={(e) => setPortfolioForm(prev => ({ ...prev, projectCategory: e.target.value }))}
+                      className="w-full border border-gray-300 p-2.5 rounded text-sm"
+                    >
+                      <option value="">Select a category</option>
+                      {PHOTOGRAPHY_CATEGORIES.map((category) => (
+                        <option key={category} value={category}>{category}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Project Tags (Optional)</label>
+                    <input
+                      type="text"
+                      placeholder="Add tags separated by comma"
+                      value={portfolioForm.projectTags.join(', ')}
+                      onChange={(e) => {
+                        const tags = e.target.value.split(',').map(t => t.trim()).filter(Boolean);
+                        setPortfolioForm(prev => ({ ...prev, projectTags: tags }));
+                      }}
+                      className="w-full border border-gray-300 p-2.5 rounded text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Visibility</label>
+                    <select
+                      value={portfolioForm.visibility}
+                      onChange={(e) => setPortfolioForm(prev => ({ ...prev, visibility: e.target.value }))}
+                      className="w-full border border-gray-300 p-2.5 rounded text-sm"
+                    >
+                      <option value="public">Public</option>
+                      <option value="private">Private</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-white border-t p-6 flex gap-3">
+              <button
+                onClick={() => setShowPortfolioModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded text-sm font-medium hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePortfolioSubmit}
+                disabled={loading}
+                className="flex-1 px-4 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
+              >
+                Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
         <h1 className="text-2xl font-semibold mb-6">My Profile</h1>
 
-        {/* Tabs */}
         <div className="bg-white rounded-t-lg shadow-sm">
           <div className="flex border-b">
-            <button
-              onClick={() => setActiveTab('basic')}
-              className={`px-6 py-3 font-medium ${
-                activeTab === 'basic'
-                  ? 'text-orange-500 border-b-2 border-orange-500'
-                  : 'text-gray-500'
-              }`}
-            >
+            <button onClick={() => setActiveTab('basic')} className={`px-6 py-3 font-medium ${activeTab === 'basic' ? 'text-orange-500 border-b-2 border-orange-500' : 'text-gray-500'}`}>
               Basic Information
             </button>
-            <button
-              onClick={() => setActiveTab('services')}
-              className={`px-6 py-3 font-medium ${
-                activeTab === 'services'
-                  ? 'text-orange-500 border-b-2 border-orange-500'
-                  : 'text-gray-500'
-              }`}
-            >
+            <button onClick={() => setActiveTab('services')} className={`px-6 py-3 font-medium ${activeTab === 'services' ? 'text-orange-500 border-b-2 border-orange-500' : 'text-gray-500'}`}>
               Services
             </button>
-            <button
-              onClick={() => setActiveTab('portfolio')}
-              className={`px-6 py-3 font-medium ${
-                activeTab === 'portfolio'
-                  ? 'text-orange-500 border-b-2 border-orange-500'
-                  : 'text-gray-500'
-              }`}
-            >
+            <button onClick={() => setActiveTab('portfolio')} className={`px-6 py-3 font-medium ${activeTab === 'portfolio' ? 'text-orange-500 border-b-2 border-orange-500' : 'text-gray-500'}`}>
               Portfolio
             </button>
           </div>
 
-          {/* Content */}
           <div className="p-6 md:p-8">
             {activeTab === 'basic' && (
               <div>
-                {/* Profile Picture */}
                 <div className="mb-8">
                   <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
-                    <Upload className="w-8 h-8 text-gray-400" />
+                    {formData.profilePicture ? (
+                      <img src={formData.profilePicture} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                      <Upload className="w-8 h-8 text-gray-400" />
+                    )}
                   </div>
-                  <button className="text-orange-500 text-sm mt-2 font-medium">
+                  <label className="text-orange-500 text-sm mt-2 font-medium cursor-pointer block">
                     Upload Picture
-                  </button>
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e, 'profile')} disabled={loading} />
+                  </label>
                 </div>
 
-                {/* Basic Info Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Name
-                    </label>
-                    <input
-                      name="name"
-                      placeholder="Random Name"
-                      className="w-full border border-gray-300 p-2.5 rounded text-sm"
-                      onChange={handleChange}
-                    />
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                    <input name="name" value={formData.name} placeholder="Random Name" className="w-full border border-gray-300 p-2.5 rounded text-sm" onChange={handleChange} />
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Email
-                    </label>
-                    <input
-                      name="email"
-                      placeholder="Randommail@gmail.com"
-                      className="w-full border border-gray-300 p-2.5 rounded text-sm"
-                      onChange={handleChange}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Phone Number
-                    </label>
-                    <input
-                      name="phone"
-                      placeholder="Randommail@gmail.com"
-                      className="w-full border border-gray-300 p-2.5 rounded text-sm"
-                      onChange={handleChange}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Location
-                    </label>
-                    <select
-                      name="location"
-                      className="w-full border border-gray-300 p-2.5 rounded text-sm"
-                      onChange={handleChange}
-                      value={formData.location}
-                    >
-                      <option value="Delhi">Delhi</option>
-                      <option value="Mumbai">Mumbai</option>
-                      <option value="Bangalore">Bangalore</option>
-                    </select>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                    <input name="email" value={formData.email} placeholder="email@example.com" className="w-full border border-gray-300 p-2.5 rounded text-sm bg-gray-100" disabled />
                   </div>
                 </div>
 
-                {/* Date of Birth */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+                    <input name="phoneNumber" value={formData.phoneNumber} placeholder="+91 1234567890" className="w-full border border-gray-300 p-2.5 rounded text-sm" onChange={handleChange} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                    <input name="location" value={formData.location} placeholder="Delhi" className="w-full border border-gray-300 p-2.5 rounded text-sm" onChange={handleChange} />
+                  </div>
+                </div>
+
                 <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Date of birth
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Date of birth</label>
                   <div className="grid grid-cols-3 gap-4">
-                    <select
-                      name="dateDay"
-                      className="border border-gray-300 p-2.5 rounded text-sm"
-                      onChange={handleChange}
-                    >
+                    <select name="dobDate" value={formData.dobDate} onChange={handleChange} className="border border-gray-300 p-2.5 rounded text-sm">
                       <option value="">Date</option>
-                      {Array.from({ length: 31 }, (_, i) => (
-                        <option key={i + 1} value={i + 1}>
-                          {i + 1}
-                        </option>
-                      ))}
+                      {dates.map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
-                    <select
-                      name="dateMonth"
-                      className="border border-gray-300 p-2.5 rounded text-sm"
-                      onChange={handleChange}
-                    >
+                    <select name="dobMonth" value={formData.dobMonth} onChange={handleChange} className="border border-gray-300 p-2.5 rounded text-sm">
                       <option value="">Month</option>
-                      {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, i) => (
-                        <option key={i} value={i + 1}>
-                          {m}
-                        </option>
-                      ))}
+                      {months.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
                     </select>
-                    <select
-                      name="dateYear"
-                      className="border border-gray-300 p-2.5 rounded text-sm"
-                      onChange={handleChange}
-                    >
+                    <select name="dobYear" value={formData.dobYear} onChange={handleChange} className="border border-gray-300 p-2.5 rounded text-sm">
                       <option value="">Year</option>
-                      {Array.from({ length: 100 }, (_, i) => (
-                        <option key={i} value={2024 - i}>
-                          {2024 - i}
-                        </option>
-                      ))}
+                      {years.map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
                   </div>
                 </div>
 
-                {/* Gender */}
                 <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Gender
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">Gender</label>
                   <div className="flex gap-6">
-                    {[
-                      { value: 'male', label: 'Male' },
-                      { value: 'female', label: 'Female' },
-                      { value: 'others', label: 'Others' }
-                    ].map(g => (
-                      <label key={g.value} className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="gender"
-                          value={g.value}
-                          checked={formData.gender === g.value}
-                          onChange={handleChange}
-                          className="w-4 h-4 text-orange-500"
-                        />
-                        <span className="text-sm text-gray-700">{g.label}</span>
+                    {genderOptions.map((option) => (
+                      <label key={option.value} className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="gender" value={option.value} checked={formData.gender === option.value} onChange={handleChange} className="w-4 h-4 text-orange-500" />
+                        <span className="text-sm text-gray-700">{option.label}</span>
                       </label>
                     ))}
                   </div>
                 </div>
 
-                {/* Experience */}
                 <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Experience
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">Experience</label>
                   <div className="flex gap-6">
-                    {[
-                      { value: 'fresher', label: 'Fresher' },
-                      { value: 'experienced', label: 'Experienced' }
-                    ].map(exp => (
-                      <label key={exp.value} className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="experience"
-                          value={exp.value}
-                          checked={formData.experience === exp.value}
-                          onChange={handleChange}
-                          className="w-4 h-4 text-orange-500"
-                        />
-                        <span className="text-sm text-gray-700">{exp.label}</span>
+                    {experienceOptions.map((option) => (
+                      <label key={option.value} className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="experience" value={option.value} checked={formData.experience === option.value} onChange={handleChange} className="w-4 h-4 text-orange-500" />
+                        <span className="text-sm text-gray-700">{option.label}</span>
                       </label>
                     ))}
                   </div>
                 </div>
 
-                {/* Availability */}
                 <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Availability
-                  </label>
-                  <div className="flex gap-6">
-                    {[
-                      { value: 'immediately', label: 'Immediately' },
-                      { value: 'within a week', label: 'Within a week' },
-                      { value: 'within 15 days', label: 'Within 15 days' }
-                    ].map(a => (
-                      <label key={a.value} className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="availability"
-                          value={a.value}
-                          checked={formData.availability === a.value}
-                          onChange={handleChange}
-                          className="w-4 h-4 text-orange-500"
-                        />
-                        <span className="text-sm text-gray-700">{a.label}</span>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">Availability</label>
+                  <div className="flex gap-6 flex-wrap">
+                    {availabilityOptions.map((option) => (
+                      <label key={option.value} className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="availability" value={option.value} checked={formData.availability === option.value} onChange={handleChange} className="w-4 h-4 text-orange-500" />
+                        <span className="text-sm text-gray-700">{option.label}</span>
                       </label>
                     ))}
                   </div>
                 </div>
 
-                {/* Address Fields */}
-                <div className="space-y-6 mb-6">
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Permanent Address</label>
+                  <input name="permanentAddress" value={formData.permanentAddress} placeholder="Enter address" className="w-full border border-gray-300 p-2.5 rounded text-sm" onChange={handleChange} />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Permanent Address
-                    </label>
-                    <input
-                      name="address"
-                      placeholder="Enter address"
-                      className="w-full border border-gray-300 p-2.5 rounded text-sm"
-                      onChange={handleChange}
-                    />
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Hometown</label>
+                    <input name="hometown" value={formData.hometown} placeholder="Delhi" className="w-full border border-gray-300 p-2.5 rounded text-sm" onChange={handleChange} />
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Hometown
-                      </label>
-                      <input
-                        name="hometown"
-                        placeholder="Delhi"
-                        className="w-full border border-gray-300 p-2.5 rounded text-sm"
-                        onChange={handleChange}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Pincode
-                      </label>
-                      <input
-                        name="pincode"
-                        placeholder="110001"
-                        className="w-full border border-gray-300 p-2.5 rounded text-sm"
-                        onChange={handleChange}
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Pincode</label>
+                    <input name="pincode" value={formData.pincode} placeholder="110001" className="w-full border border-gray-300 p-2.5 rounded text-sm" onChange={handleChange} />
                   </div>
                 </div>
 
-                {/* Languages */}
                 <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Languages
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">Languages</label>
                   {formData.languages.map((lang, index) => (
-                    <div key={index} className="mb-4">
+                    <div key={index} className="mb-4 p-4 border border-gray-200 rounded-lg">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                        <select
-                          value={lang.language}
-                          onChange={(e) => handleLanguageChange(index, 'language', e.target.value)}
-                          className="border border-gray-300 p-2.5 rounded text-sm"
-                        >
+                        <select value={lang.language} onChange={(e) => handleLanguageChange(index, 'language', e.target.value)} className="border border-gray-300 p-2.5 rounded text-sm">
                           <option>English</option>
                           <option>Hindi</option>
                           <option>Spanish</option>
+                          <option>French</option>
+                          <option>German</option>
                         </select>
-
-                        <select
-                          value={lang.proficiency}
-                          onChange={(e) => handleLanguageChange(index, 'proficiency', e.target.value)}
-                          className="border border-gray-300 p-2.5 rounded text-sm"
-                        >
+                        <select value={lang.proficiency} onChange={(e) => handleLanguageChange(index, 'proficiency', e.target.value)} className="border border-gray-300 p-2.5 rounded text-sm">
                           <option>Beginner</option>
                           <option>Intermediate</option>
                           <option>Expert</option>
                         </select>
                       </div>
-
-                      <div className="flex items-center gap-6">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={lang.read}
-                            onChange={(e) => handleLanguageChange(index, 'read', e.target.checked)}
-                            className="w-4 h-4 text-orange-500"
-                          />
-                          <span className="text-sm text-gray-700">Read</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={lang.write}
-                            onChange={(e) => handleLanguageChange(index, 'write', e.target.checked)}
-                            className="w-4 h-4 text-orange-500"
-                          />
-                          <span className="text-sm text-gray-700">Write</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={lang.speak}
-                            onChange={(e) => handleLanguageChange(index, 'speak', e.target.checked)}
-                            className="w-4 h-4 text-orange-500"
-                          />
-                          <span className="text-sm text-gray-700">Speak</span>
-                        </label>
-                        {index > 0 && (
-                          <button
-                            onClick={() => {
-                              const newLanguages = formData.languages.filter((_, i) => i !== index);
-                              setFormData(prev => ({ ...prev, languages: newLanguages }));
-                            }}
-                            className="ml-auto text-sm text-gray-500 hover:text-red-500"
-                          >
-                            Delete
-                          </button>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-6">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" checked={lang.read} onChange={(e) => handleLanguageChange(index, 'read', e.target.checked)} className="w-4 h-4 text-orange-500" />
+                            <span className="text-sm text-gray-700">Read</span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" checked={lang.write} onChange={(e) => handleLanguageChange(index, 'write', e.target.checked)} className="w-4 h-4 text-orange-500" />
+                            <span className="text-sm text-gray-700">Write</span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" checked={lang.speak} onChange={(e) => handleLanguageChange(index, 'speak', e.target.checked)} className="w-4 h-4 text-orange-500" />
+                            <span className="text-sm text-gray-700">Speak</span>
+                          </label>
+                        </div>
+                        {formData.languages.length > 1 && (
+                          <button onClick={() => removeLanguage(index)} className="text-sm text-red-500 hover:text-red-700">Delete</button>
                         )}
                       </div>
                     </div>
                   ))}
-                  <button
-                    onClick={addLanguage}
-                    className="text-orange-500 text-sm font-medium hover:underline"
-                  >
-                    Add languages
-                  </button>
+                  <button onClick={addLanguage} className="text-orange-500 text-sm font-medium hover:underline">Add languages</button>
                 </div>
               </div>
             )}
@@ -813,120 +1078,154 @@ export default function ProfilePage() {
                 <div className="flex justify-between items-center mb-6">
                   <h2 className="text-xl font-semibold">Services</h2>
                   <button
-                    onClick={() => setShowServiceModal(true)}
-                    className="px-4 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-800"
+                    onClick={() => openServiceModal()}
+                    className="px-6 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-800"
                   >
                     Add Service
                   </button>
                 </div>
 
-                <div className="space-y-4">
-                  {services.map((service) => (
-                    <div key={service.id} className="border border-gray-200 rounded-lg p-6 bg-white relative">
-                      <button className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded">
-                        <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                        </svg>
-                      </button>
-                      <h3 className="font-semibold mb-4">{service.category}</h3>
-                      <div className="grid grid-cols-3 gap-8">
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Type</p>
-                          <p className="text-sm">{service.type}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Description</p>
-                          <p className="text-sm">{service.description}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Experience</p>
-                          <p className="text-sm">{service.experience}</p>
+                {services.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <p>No services added yet. Click "Add Service" to get started.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {services.map((service) => (
+                      <div key={service.id} className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-lg mb-2">{service.type}</h3>
+                            <div className="grid grid-cols-3 gap-4 mb-3">
+                              <div>
+                                <p className="text-xs text-gray-500 mb-1">Type</p>
+                                <p className="text-sm">{service.type}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500 mb-1">Description</p>
+                                <p className="text-sm">{service.description}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500 mb-1">Experience</p>
+                                <p className="text-sm">{service.experienceYears}-{service.experienceMonths} years</p>
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => openServiceModal(service)}
+                            className="ml-4 text-gray-400 hover:text-gray-600"
+                          >
+                            <Edit2 className="w-5 h-5" />
+                          </button>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
             {activeTab === 'portfolio' && (
               <div>
-                {/* Photos Section */}
-                <div className="mb-8">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold">Photos</h3>
-                    <button
-                      onClick={() => {
-                        setProjectType('photo');
-                        setShowProjectModal(true);
-                      }}
-                      className="px-4 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-800"
-                    >
-                      Add Photos
-                    </button>
-                  </div>
+                <div className="mb-6">
+                  <h2 className="text-xl font-semibold mb-4">Photos</h2>
+                  <button
+                    onClick={() => {
+                      setPortfolioForm(prev => ({ ...prev, mediaType: 'image' }));
+                      openPortfolioModal();
+                    }}
+                    className="px-6 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-800 mb-6"
+                  >
+                    Add Photos
+                  </button>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {photos.map((photo) => (
-                      <div key={photo.id} className="bg-gray-200 rounded-lg overflow-hidden">
-                        <div className="aspect-video bg-gradient-to-br from-orange-200 to-pink-200"></div>
-                        <div className="p-4 bg-white">
-                          <p className="font-medium text-sm mb-1">{photo.type}</p>
-                          <p className="text-xs text-gray-600">{photo.caption}</p>
+                  {portfolio.filter(p => p.mediaType === 'image').length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>No photos added yet.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {portfolio.filter(p => p.mediaType === 'image').map((item) => (
+                        <div key={item.id} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
+                          <div className="aspect-video bg-gray-100">
+                            {item.media && item.media[0] && (
+                              <img src={item.media[0]} alt={item.projectName} className="w-full h-full object-cover" />
+                            )}
+                          </div>
+                          <div className="p-4">
+                            <h3 className="font-semibold mb-1">{item.projectName}</h3>
+                            <p className="text-sm text-gray-600 mb-2">{item.projectCaption}</p>
+                            <button
+                              onClick={() => openPortfolioModal(item)}
+                              className="text-yellow-500 text-sm hover:underline flex items-center gap-1"
+                            >
+                              <Edit2 className="w-3 h-3" /> Edit
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                {/* Videos Section */}
-                <div>
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold">Videos</h3>
-                    <button
-                      onClick={() => {
-                        setProjectType('video');
-                        setShowProjectModal(true);
-                      }}
-                      className="px-4 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-800"
-                    >
-                      Add Videos
-                    </button>
-                  </div>
+                <div className="mt-12">
+                  <h2 className="text-xl font-semibold mb-4">Videos</h2>
+                  <button
+                    onClick={() => {
+                      setPortfolioForm(prev => ({ ...prev, mediaType: 'video' }));
+                      openPortfolioModal();
+                    }}
+                    className="px-6 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-800 mb-6"
+                  >
+                    Add Videos
+                  </button>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {videos.map((video) => (
-                      <div key={video.id} className="bg-gray-200 rounded-lg overflow-hidden">
-                        <div className="aspect-video bg-gradient-to-br from-purple-200 to-blue-200 flex items-center justify-center">
-                          <svg className="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M8 5v14l11-7z" />
-                          </svg>
+                  {portfolio.filter(p => p.mediaType === 'video').length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>No videos added yet.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {portfolio.filter(p => p.mediaType === 'video').map((item) => (
+                        <div key={item.id} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
+                          <div className="aspect-video bg-gray-100 relative">
+                            {item.media && item.media[0] && (
+                              <video src={item.media[0]} className="w-full h-full object-cover" />
+                            )}
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <div className="w-16 h-16 bg-white bg-opacity-80 rounded-full flex items-center justify-center">
+                                <Play className="w-8 h-8 text-gray-700" />
+                              </div>
+                            </div>
+                          </div>
+                          <div className="p-4">
+                            <h3 className="font-semibold mb-1">{item.projectName}</h3>
+                            <p className="text-sm text-gray-600 mb-2">{item.projectCaption}</p>
+                            <button
+                              onClick={() => openPortfolioModal(item)}
+                              className="text-yellow-500 text-sm hover:underline flex items-center gap-1"
+                            >
+                              <Edit2 className="w-3 h-3" /> Edit
+                            </button>
+                          </div>
                         </div>
-                        <div className="p-4 bg-white">
-                          <p className="font-medium text-sm mb-1">{video.type}</p>
-                          <p className="text-xs text-gray-600">{video.caption}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* Actions */}
         <div className="flex justify-end gap-4 mt-6 bg-white p-6 rounded-b-lg shadow-sm">
-          <button className="px-6 py-2 border border-gray-300 rounded text-sm font-medium hover:bg-gray-50">
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            className="px-8 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-800"
-          >
+          <button onClick={() => window.location.reload()} className="px-6 py-2 border border-gray-300 rounded text-sm font-medium hover:bg-gray-50">Cancel</button>
+          <button onClick={handleSubmit} disabled={loading} className="px-8 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+            {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
             Save
           </button>
         </div>
       </div>
     </div>
-  )};
+  );
+}

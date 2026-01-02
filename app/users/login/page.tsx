@@ -69,8 +69,7 @@ export default function LoginPage() {
       try {
         const isAuthenticated = authService.isAuthenticated();
         if (isAuthenticated) {
-          // User is already logged in, redirect to dashboard
-          router.push('/leads');
+          router.push('/users/basicinfo');
         } else {
           setIsCheckingAuth(false);
         }
@@ -103,58 +102,64 @@ export default function LoginPage() {
     setError('');
   };
 
-  const handleLogin = async () => {
-    if (!formData.email || !formData.password) {
-      setError('Please fill in all fields');
-      return;
-    }
+ const handleLogin = async () => {
+  if (!formData.email || !formData.password) {
+    setError('Please fill in all fields');
+    return;
+  }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
-      setError('Please enter a valid email address');
-      return;
-    }
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(formData.email)) {
+    setError('Please enter a valid email address');
+    return;
+  }
 
-    setIsLoading(true);
-    setError('');
-    setSuccess('');
+  setIsLoading(true);
+  setError('');
+  setSuccess('');
 
-    try {
-      const result = await authService.login(formData.email, formData.password);
+  try {
+    const result = await authService.login(formData.email, formData.password);
 
-      if (result.success && result.data) {
-        // Check if user is verified
-        if (!result.data.isVerified) {
-          setError('Please verify your account first. Check your email for the verification code.');
-          // Store email for verification page
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('pendingVerificationEmail', formData.email);
-          }
-          // Redirect to verification page
-          setTimeout(() => {
-            router.push(`/users/verification?category=${category}&email=${encodeURIComponent(formData.email)}`);
-          }, 2000);
-          return;
-        }
+    // Detailed logging - click to expand in console
+    console.group('🔍 Login Response Details');
+    console.log('Success:', result.success);
+    console.log('Message:', result.message);
+    console.log('Data object:', result.data);
+    console.log('Has token in data?', 'token' in (result.data || {}));
+    console.log('Token value:', result.data?.token);
+    console.log('Token length:', result.data?.token?.length);
+    console.log('User ID:', result.data?.userId);
+    console.log('Email:', result.data?.email);
+    console.log('Name:', result.data?.name);
+    console.groupEnd();
 
-        // Login successful - authService already set cookies
-        setSuccess('Login successful! Redirecting...');
-        
-        // Redirect to leads page
-        setTimeout(() => {
-          router.push('/users/basicinfo');
-        }, 1000);
-      } else {
-        setError(result.error || 'Invalid email or password');
+    if (result.success && result.data) {
+      // Check if token was saved
+      const savedToken = authService.getToken();
+      console.log('💾 Token saved to cookies?', savedToken ? 'YES' : 'NO');
+      if (savedToken) {
+        console.log('💾 Token preview:', savedToken.substring(0, 30) + '...');
       }
-    } catch (error: any) {
-      setError(error.message || 'An error occurred. Please try again.');
-      console.error('Login error:', error);
-    } finally {
-      setIsLoading(false);
+      
+      // Login successful - authService already set cookies
+      setSuccess('Login successful! Redirecting...');
+      
+      // Redirect to profile or dashboard
+      setTimeout(() => {
+        router.push('/users/basicinfo');
+      }, 1000);
+    } else {
+      setError(result.error || 'Invalid email or password');
     }
-  };
+  } catch (error: any) {
+    setError(error.message || 'An error occurred. Please try again.');
+    console.error('Login error:', error);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // Handle Enter key press
   const handleKeyPress = (e: React.KeyboardEvent) => {

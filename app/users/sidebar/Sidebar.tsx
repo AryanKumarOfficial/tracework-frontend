@@ -19,7 +19,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     { icon: MessageSquare, label: 'My Response', href: '/users/response', key: 'response' },
     { icon: HelpCircle, label: 'Support', href: '/users/support', key: 'support' },
     { icon: Settings, label: 'Settings', href: '/users/settings', key: 'settings' },
-    { icon: LogOut, label: 'Logout', href: '/users', key: 'logout' },
+    { icon: LogOut, label: 'Logout', href: '/users/logout', key: 'logout' },
   ];
 
   const isActive = (href: string) => pathname === href;

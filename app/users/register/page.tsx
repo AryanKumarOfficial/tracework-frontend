@@ -64,7 +64,7 @@ export default function RegistrationPage() {
         const currentUser = authService.getCurrentUser();
         if (currentUser) {
           // User is already logged in, redirect to dashboard
-          router.push('/dashboard');
+          router.push('/users/login');
         } else {
           setIsCheckingAuth(false);
         }
@@ -274,7 +274,7 @@ export default function RegistrationPage() {
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
           <div className="grid md:grid-cols-2">
             {/* Left Side - Image */}
-            <div className="bg-gradient-to-br from-gray-100 to-gray-200 p-8 flex items-center justify-center min-h-[700px]">
+            <div className="bg-linear-to-br from-gray-100 to-gray-200 p-8 flex items-center justify-center min-h-175">
               <img
                 src={categoryData[category].image}
                 alt={categoryData[category].alt}

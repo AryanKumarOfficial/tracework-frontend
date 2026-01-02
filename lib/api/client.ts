@@ -10,6 +10,7 @@ import type {
   LeadData,
   ApplicationData,
 } from '../types/auth.types';
+import Cookies from 'js-cookie';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
 
@@ -24,94 +25,106 @@ interface RegisterRequestBackend {
 
 class ApiClient {
   private getAuthHeader(): Record<string, string> {
-    // Get token from cookies if needed for Authorization header
-    if (typeof window !== 'undefined') {
+    // Try to get token from js-cookie first
+    let token = Cookies.get('token');
+    
+    // If not found, try manual cookie parsing
+    if (!token && typeof document !== 'undefined') {
       const cookies = document.cookie.split(';');
       const tokenCookie = cookies.find(c => c.trim().startsWith('token='));
       if (tokenCookie) {
-        const token = tokenCookie.split('=')[1];
-        return {
-          'Authorization': `Bearer ${token}`
-        };
+        token = tokenCookie.split('=')[1];
       }
     }
+    
+    console.log('🔑 Token status:', token ? 'Token found' : 'No token found');
+    
+    if (token) {
+      return {
+        'Authorization': `Bearer ${token}`
+      };
+    }
+    
     return {};
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
-    try {
-      const fullUrl = `${API_BASE_URL}${endpoint}`;
-      console.log('📤 API Request:', {
-        url: fullUrl,
-        method: options.method || 'GET',
-        body: options.body ? JSON.parse(options.body as string) : null,
-      });
+  try {
+    const fullUrl = `${API_BASE_URL}${endpoint}`;
+    console.log('📤 API Request:', {
+      url: fullUrl,
+      method: options.method || 'GET',
+      body: options.body ? JSON.parse(options.body as string) : null,
+    });
 
-      const response = await fetch(fullUrl, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...this.getAuthHeader(),
-          ...options.headers,
-        },
-        credentials: 'include',
-      });
+    const response = await fetch(fullUrl, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeader(),
+        ...options.headers,
+      },
+      credentials: 'include',
+    });
 
-      console.log('📥 API Response:', {
-        url: fullUrl,
-        status: response.status,
-        statusText: response.statusText,
-      });
+    console.log('📥 API Response:', {
+      url: fullUrl,
+      status: response.status,
+      statusText: response.statusText,
+    });
 
-      // Handle unauthorized responses
-      if (response.status === 401) {
-        if (typeof window !== 'undefined') {
-          document.cookie = 'token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-          document.cookie = 'user=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-        }
-        
-        return {
-          success: false,
-          error: 'Session expired. Please login again.',
-        };
-      }
-
-      // Handle other error statuses
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('❌ API Error:', errorData);
-        
-        return {
-          success: false,
-          error: errorData.message || errorData.error || `Request failed with status ${response.status}`,
-          message: errorData.message,
-        };
-      }
-
-      const data = await response.json();
-      console.log('✅ API Success:', data);
+    // Handle unauthorized responses
+    if (response.status === 401) {
+      // Clear cookies
+      Cookies.remove('token');
+      Cookies.remove('user');
+      Cookies.remove('refreshToken');
       
-      // Handle gRPC-style responses that wrap data
-      if (data.message || data.userId || data.user || data.leads || data.lead || data.applications) {
-        return {
-          success: true,
-          data,
-          message: data.message,
-        };
+      if (typeof document !== 'undefined') {
+        document.cookie = 'token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+        document.cookie = 'user=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
       }
       
-      return {
-        success: true,
-        data,
-      };
-    } catch (error) {
-      console.error('❌ API request failed:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Network error occurred',
+        error: 'Session expired. Please login again.',
       };
     }
+
+    // Handle other error statuses
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('❌ API Error:', errorData);
+      
+      return {
+        success: false,
+        error: errorData.message || errorData.error || `Request failed with status ${response.status}`,
+        message: errorData.message,
+      };
+    }
+
+    const data = await response.json();
+    console.log('✅ API Success:', data);
+    
+    // If the backend already returns success/data structure, return as-is
+    if (data.success !== undefined) {
+      return data;
+    }
+    
+    // Otherwise, wrap it for consistency
+    return {
+      success: true,
+      data,
+      message: data.message,
+    };
+  } catch (error) {
+    console.error('❌ API request failed:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Network error occurred',
+    };
   }
+}
 
   // ==========================================
   // AUTHENTICATION METHODS
@@ -141,18 +154,24 @@ class ApiClient {
   }
 
   async logout(): Promise<ApiResponse> {
-    // Clear cookies client-side
-    if (typeof window !== 'undefined') {
-      document.cookie = 'token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-      document.cookie = 'user=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-      document.cookie = 'refreshToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-    }
-    
-    return {
-      success: true,
-      message: 'Logged out successfully',
-    };
+  // Clear cookies using js-cookie
+  Cookies.remove('token');
+  Cookies.remove('user');
+  Cookies.remove('refreshToken');
+
+  // Clear cookies manually (extra safety)
+  if (typeof document !== 'undefined') {
+    document.cookie = 'token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    document.cookie = 'user=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    document.cookie = 'refreshToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
   }
+
+  return {
+    success: true,
+    message: 'Logged out successfully',
+  };
+}
+
 
   async refreshToken(): Promise<ApiResponse<{ token: string }>> {
     return this.request('/api/v1/users/refresh-token', {
@@ -317,6 +336,96 @@ class ApiClient {
       error: 'Feature not yet implemented',
     };
   }
+
+
+
+
+
+// Add these methods to your ApiClient class in client.ts
+
+// ==========================================
+// SERVICE METHODS
+// ==========================================
+async getServices(userId?: string): Promise<ApiResponse<{ services: any[] }>> {
+  let endpoint = '/api/v1/users/services';
+  
+  if (userId) {
+    endpoint += `?userId=${userId}`;
+  }
+
+  return this.request(endpoint);
+}
+
+async createService(data: {
+  type: string;
+  description: string;
+  experienceYears: number;
+  experienceMonths: number;
+}): Promise<ApiResponse<{ message: string; service: any }>> {
+  return this.request('/api/v1/users/services', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+async updateService(serviceId: string, data: {
+  type?: string;
+  description?: string;
+  experienceYears?: number;
+  experienceMonths?: number;
+}): Promise<ApiResponse<{ message: string; service: any }>> {
+  return this.request(`/api/v1/users/services/${serviceId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+async deleteService(serviceId: string): Promise<ApiResponse<{ message: string }>> {
+  return this.request(`/api/v1/users/services/${serviceId}`, {
+    method: 'DELETE',
+  });
+}
+
+// ==========================================
+// PORTFOLIO METHODS
+// ==========================================
+async getPortfolio(userId?: string): Promise<ApiResponse<{ portfolio: any[] }>> {
+  let endpoint = '/api/v1/users/portfolio';
+  
+  if (userId) {
+    endpoint += `?userId=${userId}`;
+  }
+
+  return this.request(endpoint);
+}
+
+async createPortfolio(data: {
+  projectName: string;
+  projectCaption: string;
+  projectTags: string[];
+  projectCategory: string;
+  visibility: string;
+  media: string[];
+  mediaType: string;
+}): Promise<ApiResponse<{ message: string; portfolio: any }>> {
+  return this.request('/api/v1/users/portfolio', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+async updatePortfolio(portfolioId: string, data: any): Promise<ApiResponse<{ message: string; portfolio: any }>> {
+  return this.request(`/api/v1/users/portfolio/${portfolioId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+async deletePortfolio(portfolioId: string): Promise<ApiResponse<{ message: string }>> {
+  return this.request(`/api/v1/users/portfolio/${portfolioId}`, {
+    method: 'DELETE',
+  });
+}
 }
 
 export const apiClient = new ApiClient();

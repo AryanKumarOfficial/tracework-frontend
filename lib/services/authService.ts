@@ -73,7 +73,7 @@ export class AuthService {
         email: result.data.email,
         name: result.data.name,
         userType: result.data.userType,
-        isVerified: result.data.isVerified,
+        // isVerified: result.data.isVerified,
         category: this.userTypeToCategory[result.data.userType] || 'photographer',
       };
       
