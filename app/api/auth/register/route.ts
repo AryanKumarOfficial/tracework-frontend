@@ -1,5 +1,4 @@
 import {NextRequest, NextResponse} from 'next/server';
-import {createCompanyGrpcClient} from '@/lib/grpc-client';
 
 export async function POST(request: NextRequest) {
     try {
@@ -11,14 +10,8 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({success: false, message: 'Missing required fields'}, {status: 400});
         }
 
-        const client = await createCompanyGrpcClient();
 
-        const response = await new Promise((resolve, reject) => {
-            client.Register({company_name: companyName, email, password}, (err, res) => {
-                if (err) reject(err);
-                else resolve(res);
-            });
-        });
+
 
         return NextResponse.json({success: true, data: response});
     } catch (error: any) {
