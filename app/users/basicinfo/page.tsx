@@ -1,29 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Upload, X, Edit2, Plus, Play } from 'lucide-react';
+import { Upload, X, Edit2, Plus, Play, Trash2 } from 'lucide-react';
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
 
-
-// Enum mappings
-const GENDER_MAP = {
-  toNumber: { 'male': '1', 'female': '2', 'others': '3' },
-  toString: { '1': 'male', '2': 'female', '3': 'others' }
-};
-
-const EXPERIENCE_MAP = {
-  toNumber: { 'fresher': '1', 'experienced': '2' },
-  toString: { '1': 'fresher', '2': 'experienced' }
-};
-
-const AVAILABILITY_MAP = {
-  toNumber: { 'immediately': '1', 'within_a_week': '2', 'within_15_days': '3' },
-  toString: { '1': 'immediately', '2': 'within_a_week', '3': 'within_15_days' }
-};
-
-// Photography service categories
 const PHOTOGRAPHY_CATEGORIES = [
   'Wedding Photography',
   'Portrait Photography',
@@ -42,7 +23,6 @@ const PHOTOGRAPHY_CATEGORIES = [
   'Product Photography',
 ];
 
-// Mock API client
 const apiClient = {
   getToken() {
     if (typeof document !== 'undefined') {
@@ -53,7 +33,7 @@ const apiClient = {
     return null;
   },
 
-  async request(endpoint: string, options: RequestInit = {}): Promise<any> {
+  async request(endpoint, options = {}) {
     try {
       const token = this.getToken();
       const fullUrl = `${API_BASE_URL}${endpoint}`;
@@ -61,7 +41,7 @@ const apiClient = {
         url: fullUrl,
         method: options.method || 'GET',
         hasToken: !!token,
-        body: options.body ? JSON.parse(options.body as string) : null,
+        body: options.body ? JSON.parse(options.body) : null,
       });
 
       const response = await fetch(fullUrl, {
@@ -83,7 +63,7 @@ const apiClient = {
       const data = await response.json();
       console.log('✅ API Response:', data);
       return data;
-    } catch (error: any) {
+    } catch (error) {
       console.error('❌ API request failed:', error);
       throw error;
     }
@@ -113,14 +93,12 @@ export default function ProfilePage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   
-  // Modals
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [showServiceCategoryModal, setShowServiceCategoryModal] = useState(false);
   const [showPortfolioModal, setShowPortfolioModal] = useState(false);
   const [editingService, setEditingService] = useState(null);
   const [editingPortfolio, setEditingPortfolio] = useState(null);
   
-  // Form data
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -139,31 +117,16 @@ export default function ProfilePage() {
     languages: [{ language: 'English', proficiency: 'Intermediate', read: true, write: false, speak: false }],
   });
 
-  // Services data
-  const [services, setServices] = useState<any[]>([]);
-  const [serviceForm, setServiceForm] = useState<{
-    type: string;
-    description: string;
-    experienceYears: string | number;
-    experienceMonths: string | number;
-  }>({
+  const [services, setServices] = useState([]);
+  const [serviceForm, setServiceForm] = useState({
     type: '',
     description: '',
-    experienceYears: '',
-    experienceMonths: '',
+    experienceYears: 0,
+    experienceMonths: 0,
   });
 
-  // Portfolio data
-  const [portfolio, setPortfolio] = useState<any[]>([]);
-  const [portfolioForm, setPortfolioForm] = useState<{
-    projectName: string;
-    projectCaption: string;
-    projectTags: string[];
-    projectCategory: string;
-    visibility: string;
-    media: string[];
-    mediaType: 'image' | 'video';
-  }>({
+  const [portfolio, setPortfolio] = useState([]);
+  const [portfolioForm, setPortfolioForm] = useState({
     projectName: '',
     projectCaption: '',
     projectTags: [],
@@ -172,7 +135,8 @@ export default function ProfilePage() {
     media: [],
     mediaType: 'image',
   });
-  const [portfolioFiles, setPortfolioFiles] = useState<File[]>([]);
+  const [portfolioFiles, setPortfolioFiles] = useState([]);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
 
   const genderOptions = [
     { value: '1', label: 'Male' },
@@ -197,6 +161,9 @@ export default function ProfilePage() {
 
   useEffect(() => {
     loadProfile();
+  }, []);
+
+  useEffect(() => {
     if (activeTab === 'services') loadServices();
     if (activeTab === 'portfolio') loadPortfolio();
   }, [activeTab]);
@@ -214,8 +181,8 @@ export default function ProfilePage() {
     try {
       setLoading(true);
       const result = await apiClient.request('/api/v1/users/me');
-
       const user = result.user || result.data?.user || result.data || result;
+      
       if (!user) throw new Error('Failed to load user data');
 
       let dobDate = '', dobMonth = '', dobYear = '';
@@ -229,10 +196,6 @@ export default function ProfilePage() {
         }
       }
 
-      const genderValue = user.gender ? (GENDER_MAP.toNumber[String(user.gender)] || String(user.gender)) : '';
-      const experienceValue = user.experience ? (EXPERIENCE_MAP.toNumber[String(user.experience)] || String(user.experience)) : '';
-      const availabilityValue = user.availability ? (AVAILABILITY_MAP.toNumber[String(user.availability)] || String(user.availability)) : '';
-
       setFormData({
         name: user.name || '',
         email: user.email || '',
@@ -241,9 +204,9 @@ export default function ProfilePage() {
         dobDate,
         dobMonth,
         dobYear,
-        gender: genderValue,
-        experience: experienceValue,
-        availability: availabilityValue,
+        gender: user.gender ? String(user.gender) : '',
+        experience: user.experience ? String(user.experience) : '',
+        availability: user.availability ? String(user.availability) : '',
         permanentAddress: user.permanentAddress || user.permanent_address || '',
         hometown: user.hometown || '',
         pincode: user.pincode || '',
@@ -259,9 +222,7 @@ export default function ProfilePage() {
 
   const loadServices = async () => {
     try {
-      console.log('📥 Loading services...');
       const result = await apiClient.request('/api/v1/users/services');
-      console.log('📥 Services API Response:', result);
       
       let servicesData = [];
       if (result.success && result.data?.services) {
@@ -274,11 +235,9 @@ export default function ProfilePage() {
         servicesData = result;
       }
       
-      console.log('📥 Parsed services:', servicesData);
       setServices(servicesData);
-    } catch (error: any) {
-      console.error('❌ Failed to load services:', error);
-      showSuccess(error.message || 'Failed to load services');
+    } catch (error) {
+      console.error('Failed to load services:', error);
       setServices([]);
     }
   };
@@ -286,7 +245,6 @@ export default function ProfilePage() {
   const loadPortfolio = async () => {
     try {
       const result = await apiClient.request('/api/v1/users/portfolio');
-      console.log('📥 Portfolio API Response:', result);
       
       let portfolioData = [];
       if (result.success && result.data?.portfolio) {
@@ -300,7 +258,7 @@ export default function ProfilePage() {
       }
       
       setPortfolio(portfolioData);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to load portfolio:', error);
       setPortfolio([]);
     }
@@ -406,16 +364,16 @@ export default function ProfilePage() {
       setServiceForm({
         type: service.type,
         description: service.description,
-        experienceYears: service.experienceYears,
-        experienceMonths: service.experienceMonths,
+        experienceYears: service.experienceYears || 0,
+        experienceMonths: service.experienceMonths || 0,
       });
     } else {
       setEditingService(null);
       setServiceForm({
         type: '',
         description: '',
-        experienceYears: '',
-        experienceMonths: '',
+        experienceYears: 0,
+        experienceMonths: 0,
       });
     }
     setShowServiceModal(true);
@@ -437,21 +395,17 @@ export default function ProfilePage() {
         experienceMonths: Number(serviceForm.experienceMonths) || 0,
       };
       
-      console.log('📤 Service payload:', payload);
-      
       let result;
       if (editingService) {
         result = await apiClient.request(`/api/v1/users/services/${editingService.id}`, {
           method: 'PUT',
           body: JSON.stringify(payload),
         });
-        console.log('📥 Update service result:', result);
       } else {
         result = await apiClient.request('/api/v1/users/services', {
           method: 'POST',
           body: JSON.stringify(payload),
         });
-        console.log('📥 Create service result:', result);
       }
       
       if (result.success || result.message) {
@@ -462,16 +416,15 @@ export default function ProfilePage() {
       } else {
         showSuccess(result.error || 'Failed to save service');
       }
-    } catch (error: any) {
-      console.error('❌ Service submit error:', error);
+    } catch (error) {
       showSuccess(error.message || 'Failed to save service');
     } finally {
       setLoading(false);
     }
   };
 
-  const deleteService = async (serviceId: string) => {
-    if (!confirm('Are you sure you want to delete this service?')) return;
+  const deleteService = async (serviceId) => {
+    if (!window.confirm('Are you sure you want to delete this service?')) return;
     
     try {
       setLoading(true);
@@ -479,16 +432,13 @@ export default function ProfilePage() {
         method: 'DELETE',
       });
       
-      console.log('📥 Delete service result:', result);
-      
       if (result.success || result.message) {
         showSuccess('Service deleted successfully');
         await loadServices();
       } else {
         showSuccess(result.error || 'Failed to delete service');
       }
-    } catch (error: any) {
-      console.error('❌ Delete service error:', error);
+    } catch (error) {
       showSuccess(error.message || 'Failed to delete service');
     } finally {
       setLoading(false);
@@ -528,29 +478,42 @@ export default function ProfilePage() {
     setPortfolioFiles(files);
   };
 
+  const removePortfolioFile = (index) => {
+    setPortfolioFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const removeExistingMedia = (index) => {
+    setPortfolioForm(prev => ({
+      ...prev,
+      media: prev.media.filter((_, i) => i !== index)
+    }));
+  };
+
   const handlePortfolioSubmit = async () => {
     try {
       if (!portfolioForm.projectName || !portfolioForm.projectCategory) {
-        showSuccess('Please fill in all required fields');
+        showSuccess('Please fill in project name and category');
         return;
       }
 
       setLoading(true);
+      setUploadingFiles(true);
 
-      const uploadedUrls: string[] = [];
+      const uploadedUrls = [];
       for (const file of portfolioFiles) {
         try {
           const result = await apiClient.uploadFile(file, 'portfolio');
-          console.log('📥 File upload result:', result);
           if (result.success && result.data?.url) {
             uploadedUrls.push(result.data.url);
           } else if (result.data?.url) {
             uploadedUrls.push(result.data.url);
           }
         } catch (uploadError) {
-          console.error('❌ File upload error:', uploadError);
+          console.error('File upload error:', uploadError);
         }
       }
+
+      setUploadingFiles(false);
 
       const finalMedia = [...portfolioForm.media, ...uploadedUrls];
       
@@ -563,53 +526,52 @@ export default function ProfilePage() {
         media: finalMedia,
         mediaType: portfolioForm.mediaType,
       };
-      
-      console.log('📤 Portfolio payload:', payload);
 
+      let result;
       if (editingPortfolio) {
-        const result = await apiClient.request(`/api/v1/users/portfolio/${editingPortfolio.id}`, {
+        result = await apiClient.request(`/api/v1/users/portfolio/${editingPortfolio.id}`, {
           method: 'PUT',
           body: JSON.stringify(payload),
         });
-        
-        console.log('📥 Update portfolio result:', result);
         showSuccess('Portfolio updated successfully');
       } else {
-        const result = await apiClient.request('/api/v1/users/portfolio', {
+        result = await apiClient.request('/api/v1/users/portfolio', {
           method: 'POST',
           body: JSON.stringify(payload),
         });
-        
-        console.log('📥 Create portfolio result:', result);
         showSuccess('Portfolio item added successfully');
       }
 
       await loadPortfolio();
       setShowPortfolioModal(false);
-    } catch (error: any) {
-      console.error('❌ Portfolio submit error:', error);
+      setPortfolioFiles([]);
+    } catch (error) {
       showSuccess(error.message || 'Failed to save portfolio item');
     } finally {
       setLoading(false);
+      setUploadingFiles(false);
     }
   };
 
-  const deletePortfolio = async (portfolioId: string) => {
-    if (!confirm('Are you sure you want to delete this portfolio item?')) return;
+  const deletePortfolio = async (portfolioId) => {
+    if (!window.confirm('Are you sure you want to delete this portfolio item?')) return;
     
     try {
+      setLoading(true);
       const result = await apiClient.request(`/api/v1/users/portfolio/${portfolioId}`, {
         method: 'DELETE',
       });
       
-      if (result.success) {
+      if (result.success || result.message) {
         showSuccess('Portfolio item deleted successfully');
         await loadPortfolio();
       } else {
         showSuccess(result.error || 'Failed to delete portfolio item');
       }
-    } catch (error: any) {
+    } catch (error) {
       showSuccess(error.message || 'Failed to delete portfolio item');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -626,28 +588,26 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
-      {/* Success Modal */}
       {showSuccessModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="fixed inset-0 bg-black bg-opacity-30" onClick={() => setShowSuccessModal(false)}></div>
-          <div className="relative bg-white rounded-lg shadow-2xl p-6 md:p-8 text-center max-w-sm w-full mx-4">
-            <div className="w-12 h-12 md:w-16 md:h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4 md:mb-6">
-              <svg className="w-6 h-6 md:w-10 md:h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="relative bg-white rounded-lg shadow-2xl p-8 text-center max-w-sm w-full mx-4">
+            <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <p className="text-sm md:text-base font-semibold text-gray-800">{successMessage}</p>
+            <p className="text-base font-semibold text-gray-800">{successMessage}</p>
           </div>
         </div>
       )}
 
-      {/* Service Modal */}
       {showServiceModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setShowServiceModal(false)}></div>
           <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-semibold">Add Service</h3>
+              <h3 className="text-lg font-semibold">{editingService ? 'Edit Service' : 'Add Service'}</h3>
               <button onClick={() => setShowServiceModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
@@ -655,28 +615,28 @@ export default function ProfilePage() {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Service Name</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Service Name *</label>
                 <input
                   type="text"
-                  placeholder="Type a service you provide"
+                  placeholder="Click to select a service"
                   value={serviceForm.type}
                   onClick={() => setShowServiceCategoryModal(true)}
                   readOnly
-                  className="w-full border border-gray-300 p-2.5 rounded text-sm cursor-pointer"
+                  className="w-full border border-gray-300 p-2.5 rounded text-sm cursor-pointer hover:border-orange-500"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Service Description</label>
                 <textarea
-                  placeholder="Write a short description for the service you provide"
+                  placeholder="Describe the service you provide..."
                   value={serviceForm.description}
                   onChange={(e) => setServiceForm(prev => ({ ...prev, description: e.target.value }))}
                   className="w-full border border-gray-300 p-2.5 rounded text-sm resize-none"
                   rows={4}
                   maxLength={4000}
                 />
-                <p className="text-xs text-gray-500 text-right mt-1">{serviceForm.description.length}/4000 Character(s) left</p>
+                <p className="text-xs text-gray-500 text-right mt-1">{serviceForm.description.length}/4000</p>
               </div>
 
               <div>
@@ -687,9 +647,9 @@ export default function ProfilePage() {
                     onChange={(e) => setServiceForm(prev => ({ ...prev, experienceYears: e.target.value }))}
                     className="border border-gray-300 p-2.5 rounded text-sm"
                   >
-                    <option value="">Years</option>
-                    {Array.from({ length: 51 }, (_, i) => (
-                      <option key={i} value={i}>{i} {i === 1 ? 'Year' : 'Years'}</option>
+                    <option value="0">0 Years</option>
+                    {Array.from({ length: 50 }, (_, i) => i + 1).map(y => (
+                      <option key={y} value={y}>{y} {y === 1 ? 'Year' : 'Years'}</option>
                     ))}
                   </select>
                   <select
@@ -697,9 +657,9 @@ export default function ProfilePage() {
                     onChange={(e) => setServiceForm(prev => ({ ...prev, experienceMonths: e.target.value }))}
                     className="border border-gray-300 p-2.5 rounded text-sm"
                   >
-                    <option value="">Months</option>
-                    {Array.from({ length: 12 }, (_, i) => (
-                      <option key={i} value={i}>{i} {i === 1 ? 'Month' : 'Months'}</option>
+                    <option value="0">0 Months</option>
+                    {Array.from({ length: 11 }, (_, i) => i + 1).map(m => (
+                      <option key={m} value={m}>{m} {m === 1 ? 'Month' : 'Months'}</option>
                     ))}
                   </select>
                 </div>
@@ -718,19 +678,23 @@ export default function ProfilePage() {
                 disabled={loading}
                 className="flex-1 px-4 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
               >
-                Save
+                {loading ? 'Saving...' : 'Save'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Service Category Modal */}
       {showServiceCategoryModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setShowServiceCategoryModal(false)}></div>
           <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6 max-h-[80vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold mb-4">Choose Service</h3>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Choose Service</h3>
+              <button onClick={() => setShowServiceCategoryModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
             <div className="space-y-2">
               {PHOTOGRAPHY_CATEGORIES.map((category) => (
                 <label key={category} className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded cursor-pointer">
@@ -752,40 +716,43 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Portfolio Modal */}
       {showPortfolioModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setShowPortfolioModal(false)}></div>
+          <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => !uploadingFiles && setShowPortfolioModal(false)}></div>
           <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b p-6">
-              <h3 className="text-lg font-semibold">Add Your Project</h3>
+            <div className="sticky top-0 bg-white border-b p-6 flex justify-between items-center">
+              <h3 className="text-lg font-semibold">{editingPortfolio ? 'Edit Project' : 'Add Your Project'}</h3>
+              <button 
+                onClick={() => setShowPortfolioModal(false)} 
+                disabled={uploadingFiles}
+                className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <div className="mb-4">
-                    <div className="flex gap-4 mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Media Type</label>
+                    <div className="flex gap-4">
                       <button
                         onClick={() => setPortfolioForm(prev => ({ ...prev, mediaType: 'image' }))}
-                        className={`flex-1 p-8 border-2 rounded-lg flex flex-col items-center gap-2 ${
+                        className={`flex-1 p-6 border-2 rounded-lg flex flex-col items-center gap-2 ${
                           portfolioForm.mediaType === 'image' ? 'border-orange-500 bg-orange-50' : 'border-gray-300'
                         }`}
                       >
-                        <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
-                          <Upload className="w-6 h-6 text-gray-600" />
-                        </div>
+                        <Upload className="w-8 h-8 text-gray-600" />
                         <span className="text-sm font-medium">Image</span>
                       </button>
                       <button
                         onClick={() => setPortfolioForm(prev => ({ ...prev, mediaType: 'video' }))}
-                        className={`flex-1 p-8 border-2 rounded-lg flex flex-col items-center gap-2 ${
+                        className={`flex-1 p-6 border-2 rounded-lg flex flex-col items-center gap-2 ${
                           portfolioForm.mediaType === 'video' ? 'border-orange-500 bg-orange-50' : 'border-gray-300'
                         }`}
                       >
-                        <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
-                          <Play className="w-6 h-6 text-gray-600" />
-                        </div>
+                        <Play className="w-8 h-8 text-gray-600" />
                         <span className="text-sm font-medium">Video</span>
                       </button>
                     </div>
@@ -818,7 +785,6 @@ export default function ProfilePage() {
                   )}
                 </div>
 
-                {/* Right side - Details */}
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Project Name</label>
@@ -888,16 +854,17 @@ export default function ProfilePage() {
             <div className="sticky bottom-0 bg-white border-t p-6 flex gap-3">
               <button
                 onClick={() => setShowPortfolioModal(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded text-sm font-medium hover:bg-gray-50"
+                disabled={uploadingFiles}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handlePortfolioSubmit}
-                disabled={loading}
+                disabled={loading || uploadingFiles}
                 className="flex-1 px-4 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
               >
-                Submit
+                {uploadingFiles ? 'Uploading...' : loading ? 'Saving...' : 'Submit'}
               </button>
             </div>
           </div>
@@ -1103,20 +1070,28 @@ export default function ProfilePage() {
                               </div>
                               <div>
                                 <p className="text-xs text-gray-500 mb-1">Description</p>
-                                <p className="text-sm">{service.description}</p>
+                                <p className="text-sm">{service.description || 'No description'}</p>
                               </div>
                               <div>
                                 <p className="text-xs text-gray-500 mb-1">Experience</p>
-                                <p className="text-sm">{service.experienceYears}-{service.experienceMonths} years</p>
+                                <p className="text-sm">{service.experienceYears || 0} years {service.experienceMonths || 0} months</p>
                               </div>
                             </div>
                           </div>
-                          <button
-                            onClick={() => openServiceModal(service)}
-                            className="ml-4 text-gray-400 hover:text-gray-600"
-                          >
-                            <Edit2 className="w-5 h-5" />
-                          </button>
+                          <div className="flex gap-2 ml-4">
+                            <button
+                              onClick={() => openServiceModal(service)}
+                              className="text-gray-400 hover:text-gray-600"
+                            >
+                              <Edit2 className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={() => deleteService(service.id)}
+                              className="text-red-400 hover:text-red-600"
+                            >
+                              <Trash2 className="w-5 h-5" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1155,12 +1130,20 @@ export default function ProfilePage() {
                           <div className="p-4">
                             <h3 className="font-semibold mb-1">{item.projectName}</h3>
                             <p className="text-sm text-gray-600 mb-2">{item.projectCaption}</p>
-                            <button
-                              onClick={() => openPortfolioModal(item)}
-                              className="text-yellow-500 text-sm hover:underline flex items-center gap-1"
-                            >
-                              <Edit2 className="w-3 h-3" /> Edit
-                            </button>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => openPortfolioModal(item)}
+                                className="text-orange-500 text-sm hover:underline flex items-center gap-1"
+                              >
+                                <Edit2 className="w-3 h-3" /> Edit
+                              </button>
+                              <button
+                                onClick={() => deletePortfolio(item.id)}
+                                className="text-red-500 text-sm hover:underline flex items-center gap-1"
+                              >
+                                <Trash2 className="w-3 h-3" /> Delete
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -1201,12 +1184,20 @@ export default function ProfilePage() {
                           <div className="p-4">
                             <h3 className="font-semibold mb-1">{item.projectName}</h3>
                             <p className="text-sm text-gray-600 mb-2">{item.projectCaption}</p>
-                            <button
-                              onClick={() => openPortfolioModal(item)}
-                              className="text-yellow-500 text-sm hover:underline flex items-center gap-1"
-                            >
-                              <Edit2 className="w-3 h-3" /> Edit
-                            </button>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => openPortfolioModal(item)}
+                                className="text-orange-500 text-sm hover:underline flex items-center gap-1"
+                              >
+                                <Edit2 className="w-3 h-3" /> Edit
+                              </button>
+                              <button
+                                onClick={() => deletePortfolio(item.id)}
+                                className="text-red-500 text-sm hover:underline flex items-center gap-1"
+                              >
+                                <Trash2 className="w-3 h-3" /> Delete
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))}
